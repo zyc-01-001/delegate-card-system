@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}签到结果{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align: center; padding: 60px 30px;">
+    {% if success %}
+        {% if already %}
+        <div style="font-size: 80px; margin-bottom: 20px;">✅</div>
+        <h1 style="color: #28a745; margin-bottom: 15px;">已签到</h1>
+        <p style="color: #666; margin-bottom: 20px;">您已完成签到，无需重复操作。</p>
+        {% else %}
+        <div style="font-size: 80px; margin-bottom: 20px;">🎉</div>
+        <h1 style="color: #28a745; margin-bottom: 15px;">签到成功！</h1>
+        <p style="color: #666; margin-bottom: 20px;">欢迎参加会议！</p>
+        {% endif %}
+        
+        {% if delegate %}
+        <div style="background: #f8f9fa; border-radius: 10px; padding: 20px; margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto;">
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee;">
+                <span style="color: #666;">姓名</span>
+                <span style="font-weight: 500;">{{ delegate.name }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee;">
+                <span style="color: #666;">代表团</span>
+                <span style="font-weight: 500;">{{ delegate.delegation }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee;">
+                <span style="color: #666;">代表类型</span>
+                <span style="font-weight: 500;">{{ delegate.delegation_type }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                <span style="color: #666;">签到时间</span>
+                <span style="font-weight: 500;">{{ delegate.check_in_time or '刚刚' }}</span>
+            </div>
+        </div>
+        {% endif %}
+    {% else %}
+    <div style="font-size: 80px; margin-bottom: 20px;">❌</div>
+    <h1 style="color: #dc3545; margin-bottom: 15px;">签到失败</h1>
+    <p style="color: #666; margin-bottom: 20px;">{{ message }}</p>
+    {% endif %}
+    
+    <div style="margin-top: 30px;">
+        <a href="{{ url_for('index') }}" class="btn btn-primary">返回首页</a>
+    </div>
+</div>
+{% endblock %}

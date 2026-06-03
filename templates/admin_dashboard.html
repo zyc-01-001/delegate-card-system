@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}管理后台{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+    }
+    
+    .stat-card h3 {
+        font-size: 32px;
+        margin-bottom: 5px;
+    }
+    
+    .stat-card p {
+        font-size: 14px;
+        opacity: 0.9;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+    }
+    
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    
+    th {
+        background: #f8f9fa;
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+    }
+    
+    td {
+        font-size: 14px;
+    }
+    
+    tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .actions {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    
+    .actions .btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .photo-thumb {
+        width: 40px;
+        height: 50px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+    
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="admin-header">
+        <div class="header" style="margin-bottom: 0; text-align: left;">
+            <h1>📊 管理后台</h1>
+        </div>
+        <a href="{{ url_for('admin_logout') }}" class="btn btn-danger" style="padding: 8px 16px; font-size: 14px;">退出登录</a>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>{{ stats.total }}</h3>
+            <p>总申报数</p>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <h3>{{ stats.pending }}</h3>
+            <p>待审核</p>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <h3>{{ stats.approved }}</h3>
+            <p>已通过</p>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+            <h3>{{ stats.checked_in }}</h3>
+            <p>已签到</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="header" style="text-align: left;">
+        <h2>代表申报列表</h2>
+    </div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>照片</th>
+                    <th>姓名</th>
+                    <th>学号</th>
+                    <th>代表团</th>
+                    <th>类型</th>
+                    <th>状态</th>
+                    <th>签到</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in delegates %}
+                <tr>
+                    <td>{{ d.id }}</td>
+                    <td>
+                        {% if d.photo_path %}
+                        <img src="/{{ d.photo_path }}" class="photo-thumb" alt="照片">
+                        {% else %}
+                        <span style="color: #999;">无</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ d.name }}</td>
+                    <td>{{ d.student_id }}</td>
+                    <td>{{ d.delegation }}</td>
+                    <td>{{ d.delegation_type }}</td>
+                    <td>
+                        <span class="status-badge status-{{ d.status }}">
+                            {% if d.status == 'pending' %}待审核
+                            {% elif d.status == 'approved' %}已通过
+                            {% elif d.status == 'rejected' %}已拒绝
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        {% if d.checked_in %}
+                        <span style="color: #28a745;">✅ 已签到</span>
+                        {% else %}
+                        <span style="color: #999;">未签到</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="actions">
+                            {% if d.status == 'pending' %}
+                            <a href="{{ url_for('approve_delegate', delegate_id=d.id) }}" class="btn btn-success" onclick="return confirm('确定通过该申请？')">通过</a>
+                            <a href="{{ url_for('reject_delegate', delegate_id=d.id) }}" class="btn btn-danger" onclick="return confirm('确定拒绝该申请？')">拒绝</a>
+                            {% endif %}
+                            <a href="{{ url_for('card_image', delegate_id=d.id) }}" class="btn btn-info" target="_blank">查看证件</a>
+                            <a href="{{ url_for('delete_delegate', delegate_id=d.id) }}" class="btn btn-danger" onclick="return confirm('确定删除？此操作不可恢复！')">删除</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 20px;">
+    <a href="{{ url_for('index') }}" style="color: #666; text-decoration: none;">← 返回首页</a>
+</div>
+{% endblock %}

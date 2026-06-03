@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}信息自主申报{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="header">
+        <h1>📝 电子代表证信息申报</h1>
+        <p>请认真填写以下信息并上传照片</p>
+    </div>
+    
+    <form method="POST" enctype="multipart/form-data" id="applyForm">
+        <div class="form-group">
+            <label>姓名 <span class="required">*</span></label>
+            <input type="text" name="name" placeholder="请输入真实姓名" required>
+        </div>
+        
+        <div class="form-group">
+            <label>学号 <span class="required">*</span></label>
+            <input type="text" name="student_id" placeholder="请输入学号" required>
+        </div>
+        
+        <div class="form-group">
+            <label>性别</label>
+            <select name="gender">
+                <option value="">请选择</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>政治面貌</label>
+            <select name="political_status">
+                <option value="">请选择</option>
+                <option value="共青团员">共青团员</option>
+                <option value="中共党员">中共党员</option>
+                <option value="群众">群众</option>
+                <option value="其他">其他</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>代表团 <span class="required">*</span></label>
+            <select name="delegation" required>
+                <option value="">请选择代表团</option>
+                <option value="第一代表团">第一代表团</option>
+                <option value="第二代表团">第二代表团</option>
+                <option value="第三代表团">第三代表团</option>
+                <option value="第四代表团">第四代表团</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>代表类型 <span class="required">*</span></label>
+            <select name="delegation_type" required>
+                <option value="">请选择</option>
+                <option value="正式代表">正式代表</option>
+                <option value="列席代表">列席代表</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>班级 <span class="required">*</span></label>
+            <select name="class_name" required>
+                <option value="">请选择班级</option>
+                <option value="2024级大数据技术一班">2024级大数据技术一班</option>
+                <option value="2024级大数据技术二班">2024级大数据技术二班</option>
+                <option value="2024级云计算技术应用班">2024级云计算技术应用班</option>
+                <option value="2024级物联网应用技术班">2024级物联网应用技术班</option>
+                <option value="2024级人工智能技术应用班">2024级人工智能技术应用班</option>
+                <option value="2024级人工智能应用技术二班">2024级人工智能应用技术二班</option>
+                <option value="2025级人工智能技术应用一班">2025级人工智能技术应用一班</option>
+                <option value="2025级人工智能技术应用二班">2025级人工智能技术应用二班</option>
+                <option value="2025级云计算技术应用班">2025级云计算技术应用班</option>
+                <option value="2025级大数据技术一班">2025级大数据技术一班</option>
+                <option value="2025级大数据技术二班">2025级大数据技术二班</option>
+                <option value="2025级物联网应用技术班">2025级物联网应用技术班</option>
+                <option value="2025级物联网应用技术二班">2025级物联网应用技术二班</option>
+                <option value="2025级工业互联网班">2025级工业互联网班</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>免冠照片 (小于5MB) <span class="required">*</span></label>
+            <input type="file" name="photo" accept="image/*" id="photoInput" required>
+            <div class="photo-preview" id="photoPreview">
+                <span style="color: #999;">照片预览</span>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-block">提交信息</button>
+    </form>
+    
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('index') }}" style="color: #666; text-decoration: none;">← 返回首页</a>
+    </div>
+</div>
+
+<script>
+document.getElementById('photoInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        if (file.size > 5 * 1024 * 1024) {
+            alert('照片大小不能超过5MB');
+            this.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('photoPreview').innerHTML = 
+                '<img src="' + e.target.result + '" alt="预览">';
+        }
+        reader.readAsDataURL(file);
+    }
+});
+</script>
+{% endblock %}

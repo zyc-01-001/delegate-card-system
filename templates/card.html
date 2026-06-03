@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}电子代表证{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="header">
+        <h1>您的电子代表证</h1>
+    </div>
+    
+    <div class="card-display">
+        <div class="card-header">
+            <h2>山西省财政税务专科学校</h2>
+            <p>大数据学院第三届团员代表大会暨学生代表大会</p>
+        </div>
+        <div class="card-body">
+            <div class="card-photo">
+                {% if delegate.photo_path %}
+                <img src="/{{ delegate.photo_path }}" alt="照片">
+                {% else %}
+                <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f0f0f0;color:#999;">无照片</div>
+                {% endif %}
+            </div>
+            <div class="card-info">
+                <div class="card-info-row">
+                    <span class="card-info-label">姓名</span>
+                    <span class="card-info-value">{{ delegate.name }}</span>
+                </div>
+                <div class="card-info-row">
+                    <span class="card-info-label">学号</span>
+                    <span class="card-info-value">{{ delegate.student_id }}</span>
+                </div>
+                <div class="card-info-row">
+                    <span class="card-info-label">性别</span>
+                    <span class="card-info-value">{{ delegate.gender or '-' }}</span>
+                </div>
+                <div class="card-info-row">
+                    <span class="card-info-label">政治面貌</span>
+                    <span class="card-info-value">{{ delegate.political_status or '-' }}</span>
+                </div>
+                <div class="card-info-row">
+                    <span class="card-info-label">代表团</span>
+                    <span class="card-info-value">{{ delegate.delegation }}</span>
+                </div>
+                <div class="card-info-row">
+                    <span class="card-info-label">班级</span>
+                    <span class="card-info-value">{{ delegate.class_name or '-' }}</span>
+                </div>
+                <div class="card-info-row">
+                    <span class="card-info-label">代表类型</span>
+                    <span class="card-info-value">{{ delegate.delegation_type }}</span>
+                </div>
+                <div class="card-info-row">
+                    <span class="card-info-label">编号</span>
+                    <span class="card-info-value">{{ delegate.card_number }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            签发日期: {{ delegate.created_at[:10] if delegate.created_at else '-' }}
+        </div>
+    </div>
+    
+    <div class="qr-section">
+        <h3 style="margin-bottom: 15px;">📱 会议签到二维码</h3>
+        <img src="data:image/png;base64,{{ qr_base64 }}" alt="签到二维码">
+        <p style="color: #666; font-size: 14px;">
+            {% if delegate.checked_in %}
+            <span style="color: #28a745;">✅ 已签到</span>
+            {% if delegate.check_in_time %}({{ delegate.check_in_time }}){% endif %}
+            {% else %}
+            <span style="color: #C41E3A;">⏳ 未签到</span><br>
+            请于会议开始前30分钟扫码签到
+            {% endif %}
+        </p>
+    </div>
+    
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('card_image', delegate_id=delegate.id) }}" class="btn btn-success" target="_blank">
+            💾 保存电子版代表证
+        </a>
+        <a href="{{ url_for('index') }}" class="btn btn-info" style="margin-left: 10px;">返回首页</a>
+    </div>
+</div>
+{% endblock %}
