@@ -7,3 +7,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: delegate-db
+          property: connectionString
+
+databases:
+  - name: delegate-db
+    databaseName: delegate_db
+    user: delegate_user
+    plan: free

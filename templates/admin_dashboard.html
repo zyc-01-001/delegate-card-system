@@ -3,6 +3,8 @@
 {% block title %}管理后台{% endblock %}
 
 {% block extra_css %}
+<!-- jsQR 二维码扫描库 -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
     .stats-grid {
         display: grid;
@@ -310,10 +312,34 @@
 <div class="card">
     <div class="checkin-section">
         <h3>⚡ 快速签到</h3>
+        
+        <!-- 摄像头扫码 -->
+        <div style="margin-bottom: 15px;">
+            <button class="btn btn-info" onclick="toggleCamera()" style="margin-bottom: 10px;">📷 打开摄像头扫码</button>
+            <div id="cameraContainer" style="display: none; text-align: center;">
+                <video id="cameraVideo" style="width: 100%; max-width: 400px; border-radius: 8px;" autoplay></video>
+                <canvas id="cameraCanvas" style="display: none;"></canvas>
+                <p style="color: #666; font-size: 14px; margin-top: 5px;">将二维码对准摄像头</p>
+                <button class="btn btn-danger" onclick="stopCamera()" style="margin-top: 10px;">关闭摄像头</button>
+            </div>
+        </div>
+        
+        <!-- 手动输入 -->
         <div class="checkin-input">
-            <input type="text" id="cardNumberInput" placeholder="输入代表证编号（如：DA20250001）或扫描二维码" autofocus>
+            <input type="text" id="cardNumberInput" placeholder="输入代表证编号（如：DA20250001）" autofocus>
             <button class="btn btn-success" onclick="checkinByCard()">签到</button>
         </div>
+        
+        <!-- 搜索签到 -->
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <p style="color: #666; font-size: 14px; margin-bottom: 10px;">或通过姓名/学号查找签到：</p>
+            <div class="checkin-input">
+                <input type="text" id="searchInput" placeholder="输入姓名或学号搜索...">
+                <button class="btn btn-primary" onclick="searchAndCheckin()">查找并签到</button>
+            </div>
+            <div id="searchResults" style="margin-top: 10px;"></div>
+        </div>
+        
         <div id="checkinResult" class="checkin-result"></div>
     </div>
 </div>
@@ -768,6 +794,216 @@ function exportData() {
     link.download = '代表名单_' + new Date().toLocaleDateString() + '.csv';
     link.click();
 }
+
+// ========== 摄像头扫码签到 ==========
+let cameraStream = null;
+let scanning = false;
+
+function toggleCamera() {
+    const container = document.getElementById('cameraContainer');
+    if (container.style.display === 'none') {
+        startCamera();
+    } else {
+        stopCamera();
+    }
+}
+
+async function startCamera() {
+    const video = document.getElementById('cameraVideo');
+    const container = document.getElementById('cameraContainer');
+    
+    try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment' } 
+        });
+        video.srcObject = cameraStream;
+        container.style.display = 'block';
+        scanning = true;
+        scanQRCode();
+    } catch (err) {
+        alert('无法访问摄像头：' + err.message + '\n请确保已授予摄像头权限，或使用手动输入方式签到。');
+    }
+}
+
+function stopCamera() {
+    const video = document.getElementById('cameraVideo');
+    const container = document.getElementById('cameraContainer');
+    
+    scanning = false;
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+    video.srcObject = null;
+    container.style.display = 'none';
+}
+
+function scanQRCode() {
+    if (!scanning) return;
+    
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('cameraCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // 使用 jsQR 解码二维码
+        try {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'dontInvert',
+            });
+            
+            if (code && code.data) {
+                // 解析二维码中的URL，提取delegate_id
+                const url = code.data;
+                console.log('扫描到二维码:', url);
+                
+                // 从URL中提取delegate_id，格式如: https://.../checkin/123
+                const match = url.match(/checkin\/(\d+)/);
+                if (match) {
+                    const delegateId = parseInt(match[1]);
+                    // 停止扫描，执行签到
+                    scanning = false;
+                    showCheckinResult('识别成功，正在签到...', 'info');
+                    
+                    fetch('/api/checkin-by-id', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({delegate_id: delegateId})
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            const type = data.already ? 'info' : 'success';
+                            showCheckinResult(data.message + (data.delegate ? ` - ${data.delegate.name}` : ''), type);
+                            if (!data.already) {
+                                setTimeout(() => location.reload(), 1500);
+                            } else {
+                                // 已签到则继续扫描
+                                scanning = true;
+                                setTimeout(scanQRCode, 1000);
+                            }
+                        } else {
+                            showCheckinResult(data.message, 'error');
+                            scanning = true;
+                            setTimeout(scanQRCode, 1000);
+                        }
+                    })
+                    .catch(err => {
+                        showCheckinResult('签到失败：' + err, 'error');
+                        scanning = true;
+                        setTimeout(scanQRCode, 1000);
+                    });
+                    
+                    return; // 退出本次扫描循环
+                } else {
+                    showCheckinResult('无法识别的二维码格式', 'error');
+                }
+            }
+        } catch (e) {
+            console.error('QR扫描错误:', e);
+        }
+    }
+    
+    // 每300ms扫描一次
+    if (scanning) {
+        requestAnimationFrame(() => setTimeout(scanQRCode, 300));
+    }
+}
+
+// ========== 搜索签到 ==========
+function searchAndCheckin() {
+    const keyword = document.getElementById('searchInput').value.trim();
+    const resultsDiv = document.getElementById('searchResults');
+    
+    if (!keyword) {
+        resultsDiv.innerHTML = '<p style="color: #C41E3A;">请输入姓名或学号</p>';
+        return;
+    }
+    
+    resultsDiv.innerHTML = '<p style="color: #666;">搜索中...</p>';
+    
+    fetch('/api/search-delegate?keyword=' + encodeURIComponent(keyword))
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            resultsDiv.innerHTML = '<p style="color: #C41E3A;">' + data.message + '</p>';
+            return;
+        }
+        
+        if (data.count === 0) {
+            resultsDiv.innerHTML = '<p style="color: #666;">未找到匹配的代表</p>';
+            return;
+        }
+        
+        let html = '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; margin-top: 10px;">';
+        
+        data.results.forEach(d => {
+            const statusText = d.status === 'pending' ? '待审核' : (d.status === 'approved' ? '已通过' : '已拒绝');
+            const checkinText = d.checked_in ? '✅ 已签到' : '⏳ 未签到';
+            const canCheckin = d.status === 'approved' && !d.checked_in;
+            
+            html += `
+                <div style="padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${d.name}</strong> (${d.student_id})<br>
+                        <small style="color: #666;">${d.delegation} | ${d.delegation_type} | ${statusText} | ${checkinText}</small>
+                    </div>
+                    <div>
+                        ${canCheckin 
+                            ? `<button class="btn btn-success" onclick="quickCheckin(${d.id}, '${d.name}')" style="padding: 6px 12px; font-size: 12px;">签到</button>`
+                            : (d.checked_in 
+                                ? '<span style="color: #28a745; font-size: 12px;">已签到</span>'
+                                : '<span style="color: #999; font-size: 12px;">不可签到</span>')
+                        }
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        resultsDiv.innerHTML = html;
+    })
+    .catch(err => {
+        resultsDiv.innerHTML = '<p style="color: #C41E3A;">搜索失败：' + err + '</p>';
+    });
+}
+
+function quickCheckin(delegateId, name) {
+    fetch('/api/checkin-by-id', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({delegate_id: delegateId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const type = data.already ? 'info' : 'success';
+            showCheckinResult(data.message, type);
+            // 刷新搜索结果
+            searchAndCheckin();
+            if (!data.already) {
+                setTimeout(() => location.reload(), 1000);
+            }
+        } else {
+            showCheckinResult(data.message, 'error');
+        }
+    })
+    .catch(err => {
+        showCheckinResult('签到失败：' + err, 'error');
+    });
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchAndCheckin();
+    }
+});
 
 // 点击弹窗外部关闭
 window.onclick = function(event) {

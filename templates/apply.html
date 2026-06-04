@@ -41,22 +41,19 @@
         </div>
         
         <div class="form-group">
-            <label>代表团 <span class="required">*</span></label>
-            <select name="delegation" required>
-                <option value="">请选择代表团</option>
-                <option value="第一代表团">第一代表团</option>
-                <option value="第二代表团">第二代表团</option>
-                <option value="第三代表团">第三代表团</option>
-                <option value="第四代表团">第四代表团</option>
+            <label>代表类型 <span class="required">*</span></label>
+            <select name="delegation_type" id="delegationType" required onchange="updateDelegationOptions()">
+                <option value="">请选择</option>
+                <option value="正式代表">正式代表</option>
+                <option value="列席代表">列席代表</option>
+                <option value="旁听">旁听</option>
             </select>
         </div>
         
         <div class="form-group">
-            <label>代表类型 <span class="required">*</span></label>
-            <select name="delegation_type" required>
-                <option value="">请选择</option>
-                <option value="正式代表">正式代表</option>
-                <option value="列席代表">列席代表</option>
+            <label>代表团 <span class="required">*</span></label>
+            <select name="delegation" id="delegationSelect" required>
+                <option value="">请先选择代表类型</option>
             </select>
         </div>
         
@@ -152,5 +149,24 @@ document.getElementById('photoUploadArea').addEventListener('drop', function(e) 
         document.getElementById('photoInput').dispatchEvent(new Event('change'));
     }
 });
+
+// 代表团联动
+function updateDelegationOptions() {
+    const type = document.getElementById('delegationType').value;
+    const select = document.getElementById('delegationSelect');
+    
+    select.innerHTML = '<option value="">请选择代表团</option>';
+    
+    if (type === '正式代表') {
+        const options = ['第一代表团', '第二代表团', '第三代表团', '第四代表团'];
+        options.forEach(opt => {
+            select.innerHTML += '<option value="' + opt + '">' + opt + '</option>';
+        });
+    } else if (type === '列席代表') {
+        select.innerHTML += '<option value="列席代表团">列席代表团</option>';
+    } else if (type === '旁听') {
+        select.innerHTML += '<option value="旁听席">旁听席</option>';
+    }
+}
 </script>
 {% endblock %}

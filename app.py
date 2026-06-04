@@ -13,7 +13,11 @@ app.secret_key = os.environ.get('SECRET_KEY', 'delegate_card_secret_key_2025')
 app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'static/uploads')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB
 
-# 数据库路径（生产环境使用绝对路径）
+# 数据库配置 - 支持 PostgreSQL 和 SQLite
+DATABASE_URL = os.environ.get('DATABASE_URL')
+USE_POSTGRESQL = bool(DATABASE_URL)
+
+# SQLite 配置（本地开发）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get('DB_PATH', os.path.join(BASE_DIR, 'instance', 'delegates.db'))
 
@@ -23,50 +27,116 @@ os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # 数据库初始化
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    # 学生信息表
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS delegates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            student_id TEXT NOT NULL UNIQUE,
-            gender TEXT,
-            political_status TEXT,
-            delegation TEXT NOT NULL,
-            delegation_type TEXT NOT NULL,
-            class_name TEXT,
-            photo_path TEXT,
-            status TEXT DEFAULT 'pending',
-            card_number TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            checked_in INTEGER DEFAULT 0,
-            check_in_time TIMESTAMP
+    if USE_POSTGRESQL:
+        import psycopg2
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=parsed.password,
+            host=parsed.hostname,
+            port=parsed.port
         )
-    ''')
-    
-    # 管理员表
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS admins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
-        )
-    ''')
-    
-    # 插入默认管理员
-    c.execute("INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)", 
-              ('admin', 'admin123'))
-    
-    conn.commit()
-    conn.close()
+        c = conn.cursor()
+        
+        # 学生信息表
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS delegates (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                student_id TEXT NOT NULL UNIQUE,
+                gender TEXT,
+                political_status TEXT,
+                delegation TEXT NOT NULL,
+                delegation_type TEXT NOT NULL,
+                class_name TEXT,
+                photo_path TEXT,
+                status TEXT DEFAULT 'pending',
+                card_number TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                checked_in INTEGER DEFAULT 0,
+                check_in_time TIMESTAMP
+            )
+        ''')
+        
+        # 管理员表
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS admins (
+                id SERIAL PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL
+            )
+        ''')
+        
+        # 插入默认管理员
+        c.execute("""INSERT INTO admins (username, password) 
+                     SELECT 'admin', 'admin123' 
+                     WHERE NOT EXISTS (SELECT 1 FROM admins WHERE username = 'admin')""")
+        
+        conn.commit()
+        conn.close()
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # 学生信息表
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS delegates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                student_id TEXT NOT NULL UNIQUE,
+                gender TEXT,
+                political_status TEXT,
+                delegation TEXT NOT NULL,
+                delegation_type TEXT NOT NULL,
+                class_name TEXT,
+                photo_path TEXT,
+                status TEXT DEFAULT 'pending',
+                card_number TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                checked_in INTEGER DEFAULT 0,
+                check_in_time TIMESTAMP
+            )
+        ''')
+        
+        # 管理员表
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS admins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL
+            )
+        ''')
+        
+        # 插入默认管理员
+        c.execute("INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)", 
+                  ('admin', 'admin123'))
+        
+        conn.commit()
+        conn.close()
 
 # 获取数据库连接
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if USE_POSTGRESQL:
+        import psycopg2
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=parsed.password,
+            host=parsed.hostname,
+            port=parsed.port
+        )
+        conn.row_factory = psycopg2.extras.DictRow
+        return conn
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
 
 # 生成代表证编号
 def generate_card_number():
@@ -210,12 +280,13 @@ def generate_card_image(delegate):
     img = Image.new('RGB', (width, height), color='#FFFFFF')
     draw = ImageDraw.Draw(img)
     
-    # 尝试加载字体
+    # 加载本地中文字体
+    font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansCJKsc-Regular.otf')
     try:
-        font_title = ImageFont.truetype("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 36)
-        font_subtitle = ImageFont.truetype("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 24)
-        font_text = ImageFont.truetype("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 20)
-        font_small = ImageFont.truetype("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 16)
+        font_title = ImageFont.truetype(font_path, 36)
+        font_subtitle = ImageFont.truetype(font_path, 24)
+        font_text = ImageFont.truetype(font_path, 20)
+        font_small = ImageFont.truetype(font_path, 16)
     except:
         font_title = ImageFont.load_default()
         font_subtitle = font_title
@@ -493,6 +564,109 @@ def checkin_by_card():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
               (now, delegate['id']))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': f"{delegate['name']} 签到成功！",
+        'delegate': {
+            'name': delegate['name'],
+            'student_id': delegate['student_id'],
+            'check_in_time': now
+        },
+        'already': False
+    })
+
+@app.route('/api/search-delegate', methods=['GET'])
+def search_delegate():
+    """搜索代表API - 按姓名或学号搜索"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+    
+    keyword = request.args.get('keyword', '').strip()
+    
+    if not keyword:
+        return jsonify({'success': False, 'message': '请输入搜索关键词'}), 400
+    
+    conn = get_db()
+    c = conn.cursor()
+    # 支持姓名或学号模糊搜索
+    c.execute("""
+        SELECT id, name, student_id, delegation, delegation_type, 
+               status, checked_in, check_in_time, card_number, photo_path
+        FROM delegates 
+        WHERE name LIKE ? OR student_id LIKE ?
+        ORDER BY 
+            CASE WHEN status = 'approved' THEN 0 ELSE 1 END,
+            created_at DESC
+    """, (f'%{keyword}%', f'%{keyword}%'))
+    
+    rows = c.fetchall()
+    conn.close()
+    
+    results = []
+    for row in rows:
+        results.append({
+            'id': row['id'],
+            'name': row['name'],
+            'student_id': row['student_id'],
+            'delegation': row['delegation'],
+            'delegation_type': row['delegation_type'],
+            'status': row['status'],
+            'checked_in': bool(row['checked_in']),
+            'check_in_time': row['check_in_time'],
+            'card_number': row['card_number'],
+            'photo_path': row['photo_path']
+        })
+    
+    return jsonify({
+        'success': True,
+        'results': results,
+        'count': len(results)
+    })
+
+@app.route('/api/checkin-by-id', methods=['POST'])
+def checkin_by_id():
+    """通过ID签到API"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+    
+    data = request.get_json()
+    delegate_id = data.get('delegate_id')
+    
+    if not delegate_id:
+        return jsonify({'success': False, 'message': '参数错误'}), 400
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM delegates WHERE id = ?", (delegate_id,))
+    delegate = c.fetchone()
+    
+    if not delegate:
+        conn.close()
+        return jsonify({'success': False, 'message': '代表不存在'}), 404
+    
+    if delegate['status'] != 'approved':
+        conn.close()
+        return jsonify({'success': False, 'message': '代表证未通过审核'}), 400
+    
+    if delegate['checked_in']:
+        conn.close()
+        return jsonify({
+            'success': True,
+            'message': f"{delegate['name']} 已签到",
+            'delegate': {
+                'name': delegate['name'],
+                'student_id': delegate['student_id'],
+                'check_in_time': delegate['check_in_time']
+            },
+            'already': True
+        })
+    
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
+              (now, delegate_id))
     conn.commit()
     conn.close()
     
