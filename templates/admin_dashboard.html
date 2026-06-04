@@ -186,6 +186,94 @@
     .filter-tab:hover {
         border-color: #C41E3A;
     }
+    
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .modal-overlay.active {
+        display: flex;
+    }
+    
+    .modal-content {
+        background: white;
+        border-radius: 16px;
+        padding: 30px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        position: relative;
+    }
+    
+    .modal-close {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        font-size: 24px;
+        cursor: pointer;
+        color: #999;
+    }
+    
+    .modal-close:hover {
+        color: #333;
+    }
+    
+    .detail-photo {
+        width: 120px;
+        height: 160px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 3px solid #C41E3A;
+        margin: 0 auto 20px;
+        display: block;
+    }
+    
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .detail-label {
+        color: #666;
+    }
+    
+    .detail-value {
+        font-weight: 500;
+    }
+    
+    .clickable-name {
+        color: #C41E3A;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+    
+    .clickable-name:hover {
+        color: #a01830;
+    }
+    
+    .report-section {
+        margin-top: 20px;
+    }
+    
+    .report-table {
+        width: 100%;
+        margin-top: 10px;
+    }
+    
+    .report-table th,
+    .report-table td {
+        padding: 8px;
+        font-size: 13px;
+    }
 </style>
 {% endblock %}
 
@@ -250,6 +338,7 @@
             <label for="selectAll">全选</label>
         </div>
         <button class="btn btn-success" onclick="batchCheckin()" style="padding: 8px 16px; font-size: 14px;">批量签到</button>
+        <button class="btn btn-info" onclick="showReport()" style="padding: 8px 16px; font-size: 14px;">📊 签到统计</button>
         <button class="btn btn-primary" onclick="exportData()" style="padding: 8px 16px; font-size: 14px;">导出数据</button>
     </div>
     
@@ -281,7 +370,7 @@
                         <span style="color: #999;">无</span>
                         {% endif %}
                     </td>
-                    <td>{{ d.name }}</td>
+                    <td><span class="clickable-name" onclick="showDetail({{ d.id }}, '{{ d.name }}', '{{ d.student_id }}', '{{ d.gender or '-' }}', '{{ d.political_status or '-' }}', '{{ d.delegation }}', '{{ d.class_name or '-' }}', '{{ d.delegation_type }}', '{{ d.status }}', '{{ d.checked_in }}', '{{ d.check_in_time or '' }}', '{{ d.card_number or '' }}', '{{ d.photo_path or '' }}')">{{ d.name }}</span></td>
                     <td>{{ d.student_id }}</td>
                     <td>{{ d.delegation }}</td>
                     <td>{{ d.delegation_type }}</td>
@@ -319,6 +408,28 @@
 
 <div style="text-align: center; margin-top: 20px;">
     <a href="{{ url_for('index') }}" style="color: #666; text-decoration: none;">← 返回首页</a>
+</div>
+
+<!-- 学生详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <h3 style="text-align: center; margin-bottom: 20px; color: #C41E3A;">学生详情</h3>
+        <img id="detailPhoto" src="" alt="照片" class="detail-photo" style="display: none;">
+        <div id="detailContent"></div>
+        <div style="text-align: center; margin-top: 20px;">
+            <a id="viewCardBtn" href="" target="_blank" class="btn btn-info">查看代表证</a>
+        </div>
+    </div>
+</div>
+
+<!-- 签到统计报表弹窗 -->
+<div class="modal-overlay" id="reportModal">
+    <div class="modal-content" style="max-width: 700px;">
+        <span class="modal-close" onclick="closeReportModal()">&times;</span>
+        <h3 style="text-align: center; margin-bottom: 20px; color: #C41E3A;">📊 签到统计报表</h3>
+        <div id="reportContent"></div>
+    </div>
 </div>
 
 <script>
@@ -429,6 +540,205 @@ function filterDelegates(filter) {
     });
 }
 
+// 显示学生详情
+function showDetail(id, name, studentId, gender, political, delegation, className, type, status, checkedIn, checkInTime, cardNumber, photoPath) {
+    const modal = document.getElementById('detailModal');
+    const content = document.getElementById('detailContent');
+    const photo = document.getElementById('detailPhoto');
+    const viewCardBtn = document.getElementById('viewCardBtn');
+    
+    // 显示照片
+    if (photoPath) {
+        photo.src = '/' + photoPath;
+        photo.style.display = 'block';
+    } else {
+        photo.style.display = 'none';
+    }
+    
+    // 设置查看证件链接
+    viewCardBtn.href = '/card/image/' + id;
+    
+    const statusText = status === 'pending' ? '待审核' : (status === 'approved' ? '已通过' : '已拒绝');
+    const checkinText = checkedIn === '1' ? '✅ 已签到' + (checkInTime ? ' (' + checkInTime + ')' : '') : '⏳ 未签到';
+    
+    content.innerHTML = `
+        <div class="detail-row"><span class="detail-label">ID</span><span class="detail-value">${id}</span></div>
+        <div class="detail-row"><span class="detail-label">姓名</span><span class="detail-value">${name}</span></div>
+        <div class="detail-row"><span class="detail-label">学号</span><span class="detail-value">${studentId}</span></div>
+        <div class="detail-row"><span class="detail-label">性别</span><span class="detail-value">${gender}</span></div>
+        <div class="detail-row"><span class="detail-label">政治面貌</span><span class="detail-value">${political}</span></div>
+        <div class="detail-row"><span class="detail-label">代表团</span><span class="detail-value">${delegation}</span></div>
+        <div class="detail-row"><span class="detail-label">班级</span><span class="detail-value">${className}</span></div>
+        <div class="detail-row"><span class="detail-label">代表类型</span><span class="detail-value">${type}</span></div>
+        <div class="detail-row"><span class="detail-label">代表证编号</span><span class="detail-value">${cardNumber || '未生成'}</span></div>
+        <div class="detail-row"><span class="detail-label">审核状态</span><span class="detail-value">${statusText}</span></div>
+        <div class="detail-row"><span class="detail-label">签到状态</span><span class="detail-value">${checkinText}</span></div>
+    `;
+    
+    modal.classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('detailModal').classList.remove('active');
+}
+
+// 显示签到统计报表
+function showReport() {
+    const modal = document.getElementById('reportModal');
+    const content = document.getElementById('reportContent');
+    
+    // 统计数据
+    let total = 0, checkedIn = 0, notCheckedIn = 0;
+    const delegationStats = {};
+    const checkedInList = [];
+    const notCheckedInList = [];
+    
+    document.querySelectorAll('#delegateTable tr').forEach(row => {
+        if (row.style.display === 'none') return;
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 9) return;
+        
+        const status = row.getAttribute('data-status');
+        if (status !== 'approved') return;
+        
+        total++;
+        const name = cells[3].textContent.trim();
+        const studentId = cells[4].textContent.trim();
+        const delegation = cells[5].textContent.trim();
+        const isChecked = row.getAttribute('data-checked') === '1';
+        
+        if (!delegationStats[delegation]) {
+            delegationStats[delegation] = {total: 0, checked: 0};
+        }
+        delegationStats[delegation].total++;
+        
+        if (isChecked) {
+            checkedIn++;
+            delegationStats[delegation].checked++;
+            checkedInList.push({name, studentId, delegation});
+        } else {
+            notCheckedIn++;
+            notCheckedInList.push({name, studentId, delegation});
+        }
+    });
+    
+    // 生成报表HTML
+    let html = `
+        <div style="margin-bottom: 20px;">
+            <h4>总体统计</h4>
+            <p>已通过审核总人数: <strong>${total}</strong></p>
+            <p>已签到: <strong style="color: #28a745;">${checkedIn}</strong> (${total > 0 ? Math.round(checkedIn/total*100) : 0}%)</p>
+            <p>未签到: <strong style="color: #C41E3A;">${notCheckedIn}</strong></p>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <h4>各代表团签到情况</h4>
+            <table class="report-table">
+                <thead><tr><th>代表团</th><th>总人数</th><th>已签到</th><th>签到率</th></tr></thead>
+                <tbody>
+    `;
+    
+    for (const [delegation, stats] of Object.entries(delegationStats)) {
+        const rate = stats.total > 0 ? Math.round(stats.checked/stats.total*100) : 0;
+        html += `<tr><td>${delegation}</td><td>${stats.total}</td><td>${stats.checked}</td><td>${rate}%</td></tr>`;
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <h4>已签到名单 (${checkedInList.length}人)</h4>
+            <table class="report-table">
+                <thead><tr><th>姓名</th><th>学号</th><th>代表团</th></tr></thead>
+                <tbody>
+    `;
+    
+    checkedInList.forEach(p => {
+        html += `<tr><td>${p.name}</td><td>${p.studentId}</td><td>${p.delegation}</td></tr>`;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        
+        <div>
+            <h4>未签到名单 (${notCheckedInList.length}人)</h4>
+            <table class="report-table">
+                <thead><tr><th>姓名</th><th>学号</th><th>代表团</th></tr></thead>
+                <tbody>
+    `;
+    
+    notCheckedInList.forEach(p => {
+        html += `<tr><td>${p.name}</td><td>${p.studentId}</td><td>${p.delegation}</td></tr>`;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="btn btn-primary" onclick="exportReport()">导出完整报表</button>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+    modal.classList.add('active');
+}
+
+function closeReportModal() {
+    document.getElementById('reportModal').classList.remove('active');
+}
+
+// 导出报表
+function exportReport() {
+    let csv = '签到统计报表\n生成时间,' + new Date().toLocaleString() + '\n\n';
+    
+    // 统计数据
+    let total = 0, checkedIn = 0;
+    const checkedInList = [];
+    const notCheckedInList = [];
+    
+    document.querySelectorAll('#delegateTable tr').forEach(row => {
+        if (row.style.display === 'none') return;
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 9) return;
+        
+        const status = row.getAttribute('data-status');
+        if (status !== 'approved') return;
+        
+        total++;
+        const name = cells[3].textContent.trim();
+        const studentId = cells[4].textContent.trim();
+        const delegation = cells[5].textContent.trim();
+        const isChecked = row.getAttribute('data-checked') === '1';
+        
+        if (isChecked) {
+            checkedIn++;
+            checkedInList.push({name, studentId, delegation});
+        } else {
+            notCheckedInList.push({name, studentId, delegation});
+        }
+    });
+    
+    csv += '总体统计\n已通过审核总人数,' + total + '\n已签到,' + checkedIn + '\n未签到,' + (total - checkedIn) + '\n签到率,' + (total > 0 ? Math.round(checkedIn/total*100) : 0) + '%\n\n';
+    
+    csv += '已签到名单\n姓名,学号,代表团\n';
+    checkedInList.forEach(p => { csv += p.name + ',' + p.studentId + ',' + p.delegation + '\n'; });
+    
+    csv += '\n未签到名单\n姓名,学号,代表团\n';
+    notCheckedInList.forEach(p => { csv += p.name + ',' + p.studentId + ',' + p.delegation + '\n'; });
+    
+    const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = '签到统计报表_' + new Date().toLocaleDateString() + '.csv';
+    link.click();
+}
+
 // 导出数据
 function exportData() {
     let csv = 'ID,姓名,学号,性别,政治面貌,代表团,班级,类型,状态,签到,签到时间\n';
@@ -457,6 +767,13 @@ function exportData() {
     link.href = URL.createObjectURL(blob);
     link.download = '代表名单_' + new Date().toLocaleDateString() + '.csv';
     link.click();
+}
+
+// 点击弹窗外部关闭
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal-overlay')) {
+        event.target.classList.remove('active');
+    }
 }
 </script>
 {% endblock %}
