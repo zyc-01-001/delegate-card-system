@@ -137,6 +137,7 @@ def apply_success():
 @app.route('/query', methods=['GET', 'POST'])
 def query():
     delegate = None
+    qr_base64 = None
     if request.method == 'POST':
         name = request.form['name']
         student_id = request.form['student_id']
@@ -150,8 +151,15 @@ def query():
         
         if not delegate:
             flash('未找到相关代表信息，请检查姓名和学号是否正确。', 'error')
+        elif delegate['status'] == 'approved':
+            # 生成签到二维码
+            check_in_url = request.url_root + 'checkin/' + str(delegate['id'])
+            qr_img = generate_qr_code(check_in_url)
+            buffer = io.BytesIO()
+            qr_img.save(buffer, format='PNG')
+            qr_base64 = base64.b64encode(buffer.getvalue()).decode()
     
-    return render_template('query.html', delegate=delegate)
+    return render_template('query.html', delegate=delegate, qr_base64=qr_base64)
 
 @app.route('/card/<int:delegate_id>')
 def show_card(delegate_id):
@@ -401,6 +409,103 @@ def delete_delegate(delegate_id):
     
     flash('已删除', 'info')
     return redirect(url_for('admin_dashboard'))
+
+# ========== 批量签到API ==========
+
+@app.route('/api/batch-checkin', methods=['POST'])
+def batch_checkin():
+    """批量签到API - 用于管理员批量操作"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+    
+    data = request.get_json()
+    delegate_ids = data.get('delegate_ids', [])
+    
+    if not delegate_ids:
+        return jsonify({'success': False, 'message': '未选择代表'}), 400
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    success_count = 0
+    failed_count = 0
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    for delegate_id in delegate_ids:
+        c.execute("SELECT * FROM delegates WHERE id = ?", (delegate_id,))
+        delegate = c.fetchone()
+        
+        if delegate and delegate['status'] == 'approved' and not delegate['checked_in']:
+            c.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
+                      (now, delegate_id))
+            success_count += 1
+        else:
+            failed_count += 1
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': f'批量签到完成：成功 {success_count} 人，跳过 {failed_count} 人',
+        'success_count': success_count,
+        'failed_count': failed_count
+    })
+
+@app.route('/api/checkin-by-card', methods=['POST'])
+def checkin_by_card():
+    """通过卡号签到API"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+    
+    data = request.get_json()
+    card_number = data.get('card_number', '').strip()
+    
+    if not card_number:
+        return jsonify({'success': False, 'message': '请输入卡号'}), 400
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM delegates WHERE card_number = ?", (card_number,))
+    delegate = c.fetchone()
+    
+    if not delegate:
+        conn.close()
+        return jsonify({'success': False, 'message': '卡号不存在'}), 404
+    
+    if delegate['status'] != 'approved':
+        conn.close()
+        return jsonify({'success': False, 'message': '代表证未通过审核'}), 400
+    
+    if delegate['checked_in']:
+        conn.close()
+        return jsonify({
+            'success': True,
+            'message': '该代表已签到',
+            'delegate': {
+                'name': delegate['name'],
+                'student_id': delegate['student_id'],
+                'check_in_time': delegate['check_in_time']
+            },
+            'already': True
+        })
+    
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
+              (now, delegate['id']))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': f"{delegate['name']} 签到成功！",
+        'delegate': {
+            'name': delegate['name'],
+            'student_id': delegate['student_id'],
+            'check_in_time': now
+        },
+        'already': False
+    })
 
 if __name__ == '__main__':
     init_db()

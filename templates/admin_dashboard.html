@@ -84,6 +84,108 @@
         align-items: center;
         margin-bottom: 20px;
     }
+    
+    .checkin-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    
+    .checkin-section h3 {
+        margin-bottom: 15px;
+        color: #333;
+    }
+    
+    .checkin-input {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .checkin-input input {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 10px;
+        font-size: 16px;
+    }
+    
+    .checkin-result {
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 10px;
+        display: none;
+    }
+    
+    .checkin-result.success {
+        background: #d4edda;
+        color: #155724;
+        display: block;
+    }
+    
+    .checkin-result.error {
+        background: #f8d7da;
+        color: #721c24;
+        display: block;
+    }
+    
+    .checkin-result.info {
+        background: #d1ecf1;
+        color: #0c5460;
+        display: block;
+    }
+    
+    .batch-actions {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .select-all {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 10px;
+    }
+    
+    .select-all input {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .delegate-checkbox {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .filter-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .filter-tab {
+        padding: 8px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 20px;
+        background: white;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s;
+    }
+    
+    .filter-tab.active {
+        background: #C41E3A;
+        color: white;
+        border-color: #C41E3A;
+    }
+    
+    .filter-tab:hover {
+        border-color: #C41E3A;
+    }
 </style>
 {% endblock %}
 
@@ -116,15 +218,46 @@
     </div>
 </div>
 
+<!-- 快速签到区域 -->
+<div class="card">
+    <div class="checkin-section">
+        <h3>⚡ 快速签到</h3>
+        <div class="checkin-input">
+            <input type="text" id="cardNumberInput" placeholder="输入代表证编号（如：DA20250001）或扫描二维码" autofocus>
+            <button class="btn btn-success" onclick="checkinByCard()">签到</button>
+        </div>
+        <div id="checkinResult" class="checkin-result"></div>
+    </div>
+</div>
+
+<!-- 批量操作区域 -->
 <div class="card">
     <div class="header" style="text-align: left;">
         <h2>代表申报列表</h2>
+    </div>
+    
+    <div class="filter-tabs">
+        <div class="filter-tab active" onclick="filterDelegates('all')">全部</div>
+        <div class="filter-tab" onclick="filterDelegates('pending')">待审核</div>
+        <div class="filter-tab" onclick="filterDelegates('approved')">已通过</div>
+        <div class="filter-tab" onclick="filterDelegates('checked_in')">已签到</div>
+        <div class="filter-tab" onclick="filterDelegates('not_checked_in')">未签到</div>
+    </div>
+    
+    <div class="batch-actions">
+        <div class="select-all">
+            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+            <label for="selectAll">全选</label>
+        </div>
+        <button class="btn btn-success" onclick="batchCheckin()" style="padding: 8px 16px; font-size: 14px;">批量签到</button>
+        <button class="btn btn-primary" onclick="exportData()" style="padding: 8px 16px; font-size: 14px;">导出数据</button>
     </div>
     
     <div class="table-container">
         <table>
             <thead>
                 <tr>
+                    <th>选择</th>
                     <th>ID</th>
                     <th>照片</th>
                     <th>姓名</th>
@@ -136,9 +269,10 @@
                     <th>操作</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="delegateTable">
                 {% for d in delegates %}
-                <tr>
+                <tr data-status="{{ d.status }}" data-checked="{{ '1' if d.checked_in else '0' }}">
+                    <td><input type="checkbox" class="delegate-checkbox" value="{{ d.id }}"></td>
                     <td>{{ d.id }}</td>
                     <td>
                         {% if d.photo_path %}
@@ -186,4 +320,143 @@
 <div style="text-align: center; margin-top: 20px;">
     <a href="{{ url_for('index') }}" style="color: #666; text-decoration: none;">← 返回首页</a>
 </div>
+
+<script>
+// 快速签到
+function checkinByCard() {
+    const cardNumber = document.getElementById('cardNumberInput').value.trim();
+    if (!cardNumber) {
+        showCheckinResult('请输入代表证编号', 'error');
+        return;
+    }
+    
+    fetch('/api/checkin-by-card', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({card_number: cardNumber})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const type = data.already ? 'info' : 'success';
+            showCheckinResult(data.message + (data.delegate ? ` - ${data.delegate.name} (${data.delegate.student_id})` : ''), type);
+            if (!data.already) {
+                setTimeout(() => location.reload(), 1500);
+            }
+        } else {
+            showCheckinResult(data.message, 'error');
+        }
+    })
+    .catch(err => {
+        showCheckinResult('签到失败：' + err, 'error');
+    });
+    
+    document.getElementById('cardNumberInput').value = '';
+    document.getElementById('cardNumberInput').focus();
+}
+
+function showCheckinResult(message, type) {
+    const result = document.getElementById('checkinResult');
+    result.className = 'checkin-result ' + type;
+    result.textContent = message;
+}
+
+// 回车签到
+document.getElementById('cardNumberInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        checkinByCard();
+    }
+});
+
+// 全选
+function toggleSelectAll() {
+    const checked = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.delegate-checkbox').forEach(cb => {
+        cb.checked = checked;
+    });
+}
+
+// 批量签到
+function batchCheckin() {
+    const selected = [];
+    document.querySelectorAll('.delegate-checkbox:checked').forEach(cb => {
+        selected.push(parseInt(cb.value));
+    });
+    
+    if (selected.length === 0) {
+        alert('请先选择要签到的代表');
+        return;
+    }
+    
+    if (!confirm(`确定要为选中的 ${selected.length} 位代表签到吗？`)) {
+        return;
+    }
+    
+    fetch('/api/batch-checkin', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({delegate_ids: selected})
+    })
+    .then(r => r.json())
+    .then(data => {
+        alert(data.message);
+        location.reload();
+    })
+    .catch(err => {
+        alert('批量签到失败：' + err);
+    });
+}
+
+// 筛选
+function filterDelegates(filter) {
+    document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    document.querySelectorAll('#delegateTable tr').forEach(row => {
+        const status = row.getAttribute('data-status');
+        const checked = row.getAttribute('data-checked');
+        
+        let show = false;
+        switch(filter) {
+            case 'all': show = true; break;
+            case 'pending': show = status === 'pending'; break;
+            case 'approved': show = status === 'approved'; break;
+            case 'checked_in': show = checked === '1'; break;
+            case 'not_checked_in': show = checked === '0' && status === 'approved'; break;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// 导出数据
+function exportData() {
+    let csv = 'ID,姓名,学号,性别,政治面貌,代表团,班级,类型,状态,签到,签到时间\n';
+    document.querySelectorAll('#delegateTable tr').forEach(row => {
+        if (row.style.display !== 'none') {
+            const cells = row.querySelectorAll('td');
+            if (cells.length > 5) {
+                csv += [
+                    cells[1].textContent.trim(),
+                    cells[3].textContent.trim(),
+                    cells[4].textContent.trim(),
+                    '', '',
+                    cells[5].textContent.trim(),
+                    '',
+                    cells[6].textContent.trim(),
+                    cells[7].textContent.trim(),
+                    cells[8].textContent.trim(),
+                    ''
+                ].join(',') + '\n';
+            }
+        }
+    });
+    
+    const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = '代表名单_' + new Date().toLocaleDateString() + '.csv';
+    link.click();
+}
+</script>
 {% endblock %}
