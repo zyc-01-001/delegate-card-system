@@ -69,10 +69,12 @@
                     <span class="card-info-label">代表团</span>
                     <span class="card-info-value">{{ delegate.delegation }}</span>
                 </div>
+                {% if delegate.class_name and '大数据' in delegate.class_name %}
                 <div class="card-info-row">
                     <span class="card-info-label">班级</span>
-                    <span class="card-info-value">{{ delegate.class_name or '-' }}</span>
+                    <span class="card-info-value">{{ delegate.class_name }}</span>
                 </div>
+                {% endif %}
                 <div class="card-info-row">
                     <span class="card-info-label">代表类型</span>
                     <span class="card-info-value">{{ delegate.delegation_type }}</span>

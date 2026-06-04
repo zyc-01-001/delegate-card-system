@@ -199,7 +199,7 @@ def card_image(delegate_id):
 def generate_card_image(delegate):
     # 创建画布
     width, height = 600, 900
-    img = Image.new('RGB', (width, height), color='#FFF5F0')
+    img = Image.new('RGB', (width, height), color='#FFFFFF')
     draw = ImageDraw.Draw(img)
     
     # 尝试加载字体
@@ -247,10 +247,14 @@ def generate_card_image(delegate):
         ("性别", delegate['gender'] or ''),
         ("政治面貌", delegate['political_status'] or ''),
         ("代表团", delegate['delegation']),
-        ("班级", delegate['class_name'] or ''),
+    ]
+    # 只有大数据学院本学院代表才显示班级
+    if delegate['class_name'] and '大数据' in delegate['class_name']:
+        info_items.append(("班级", delegate['class_name']))
+    info_items.extend([
         ("代表类型", delegate['delegation_type']),
         ("编号", delegate['card_number'] or ''),
-    ]
+    ])
     
     for i, (label, value) in enumerate(info_items):
         y = info_y + i * line_height
