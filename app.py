@@ -272,11 +272,14 @@ def query():
         name = request.form['name']
         student_id = request.form['student_id']
 
-        db = get_db()
-        c = db.execute("SELECT * FROM delegates WHERE name = ? AND student_id = ?",
-                       (name, student_id))
-        delegate = c.fetchone()
-        db.close()
+        try:
+            db = get_db()
+            c = db.execute("SELECT * FROM delegates WHERE name = ? AND student_id = ?",
+                           (name, student_id))
+            delegate = c.fetchone()
+            db.close()
+        except Exception as e:
+            return f"<h1>查询错误</h1><pre>{type(e).__name__}: {e}</pre>", 500
 
         if not delegate:
             flash('未找到相关代表信息，请检查姓名和学号是否正确。', 'error')
