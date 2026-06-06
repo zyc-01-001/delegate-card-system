@@ -435,11 +435,14 @@ def admin_login():
         username = request.form['username']
         password = request.form['password']
 
-        db = get_db()
-        c = db.execute("SELECT * FROM admins WHERE username = ? AND password = ?",
-                       (username, password))
-        admin = c.fetchone()
-        db.close()
+        try:
+            db = get_db()
+            c = db.execute("SELECT * FROM admins WHERE username = ? AND password = ?",
+                           (username, password))
+            admin = c.fetchone()
+            db.close()
+        except Exception as e:
+            return f"<h1>数据库错误</h1><pre>{type(e).__name__}: {e}</pre>", 500
 
         if admin:
             session['admin'] = True
