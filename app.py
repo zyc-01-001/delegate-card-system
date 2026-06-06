@@ -91,7 +91,13 @@ class DB:
             return sqlite3.IntegrityError
 
 
+_db_initialized = False
+
 def get_db():
+    global _db_initialized
+    if not _db_initialized:
+        init_db()
+        _db_initialized = True
     return DB()
 
 
@@ -435,14 +441,11 @@ def admin_login():
         username = request.form['username']
         password = request.form['password']
 
-        try:
-            db = get_db()
-            c = db.execute("SELECT * FROM admins WHERE username = ? AND password = ?",
-                           (username, password))
-            admin = c.fetchone()
-            db.close()
-        except Exception as e:
-            return f"<h1>数据库错误</h1><pre>{type(e).__name__}: {e}</pre>", 500
+        db = get_db()
+        c = db.execute("SELECT * FROM admins WHERE username = ? AND password = ?",
+                       (username, password))
+        admin = c.fetchone()
+        db.close()
 
         if admin:
             session['admin'] = True

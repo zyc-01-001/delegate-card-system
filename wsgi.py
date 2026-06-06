@@ -1,20 +1,10 @@
 from app import app, init_db
 
 # 启动时初始化数据库
-init_db()
-
-# 开发调试：显示详细错误信息（部署稳定后可移除）
-@app.errorhandler(500)
-def internal_error(error):
-    import traceback
-    tb = traceback.format_exc()
-    return f"<h1>500 Internal Server Error</h1><pre>{tb}</pre>", 500
-
-@app.errorhandler(Exception)
-def handle_exception(error):
-    import traceback
-    tb = traceback.format_exc()
-    return f"<h1>Error</h1><pre>{tb}</pre>", 500
+try:
+    init_db()
+except Exception as e:
+    print(f"启动时数据库初始化失败（将在首次请求时重试）: {e}")
 
 if __name__ == "__main__":
     app.run()
