@@ -547,6 +547,47 @@ def delete_delegate(delegate_id):
     flash('已删除', 'info')
     return redirect(url_for('admin_dashboard'))
 
+# ========== 批量审核API ==========
+
+@app.route('/api/batch-approve', methods=['POST'])
+def batch_approve():
+    """批量审核通过API"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+
+    data = request.get_json()
+    delegate_ids = data.get('delegate_ids', [])
+
+    if not delegate_ids:
+        return jsonify({'success': False, 'message': '未选择代表'}), 400
+
+    db = get_db()
+
+    success_count = 0
+    failed_count = 0
+
+    for delegate_id in delegate_ids:
+        c = db.execute("SELECT * FROM delegates WHERE id = ?", (delegate_id,))
+        delegate = c.fetchone()
+
+        if delegate and delegate['status'] == 'pending':
+            card_number = generate_card_number()
+            db.execute("UPDATE delegates SET status = 'approved', card_number = ? WHERE id = ?",
+                      (card_number, delegate_id))
+            success_count += 1
+        else:
+            failed_count += 1
+
+    db.commit()
+    db.close()
+
+    return jsonify({
+        'success': True,
+        'message': f'批量审核完成：成功 {success_count} 人，跳过 {failed_count} 人',
+        'success_count': success_count,
+        'failed_count': failed_count
+    })
+
 # ========== 批量签到API ==========
 
 @app.route('/api/batch-checkin', methods=['POST'])

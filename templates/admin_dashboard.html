@@ -382,6 +382,7 @@
             <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
             <label for="selectAll">全选</label>
         </div>
+        <button class="btn btn-success" onclick="batchApprove()" style="padding: 8px 16px; font-size: 14px; background: #28a745; font-weight: bold;">✓ 一键审核通过</button>
         <button class="btn btn-success" onclick="batchCheckin()" style="padding: 8px 16px; font-size: 14px;">批量签到</button>
         <button class="btn btn-info" onclick="showReport()" style="padding: 8px 16px; font-size: 14px;">📊 签到统计</button>
         <button class="btn btn-primary" onclick="exportData()" style="padding: 8px 16px; font-size: 14px;">导出数据</button>
@@ -439,6 +440,9 @@
                             {% if d.status == 'pending' %}
                             <a href="{{ url_for('approve_delegate', delegate_id=d.id) }}" class="btn btn-success" onclick="return confirm('确定通过该申请？')">通过</a>
                             <a href="{{ url_for('reject_delegate', delegate_id=d.id) }}" class="btn btn-danger" onclick="return confirm('确定拒绝该申请？')">拒绝</a>
+                            {% endif %}
+                            {% if d.status == 'approved' and not d.checked_in %}
+                            <button class="btn btn-warning" onclick="manualCheckin({{ d.id }}, '{{ d.name }}')" style="font-size: 12px; padding: 6px 12px;">补签</button>
                             {% endif %}
                             <a href="{{ url_for('card_image', delegate_id=d.id) }}" class="btn btn-info" target="_blank">查看证件</a>
                             <a href="{{ url_for('delete_delegate', delegate_id=d.id) }}" class="btn btn-danger" onclick="return confirm('确定删除？此操作不可恢复！')">删除</a>
@@ -733,6 +737,62 @@ function toggleSelectAll() {
     const checked = document.getElementById('selectAll').checked;
     document.querySelectorAll('.delegate-checkbox').forEach(cb => {
         cb.checked = checked;
+    });
+}
+
+// 一键批量审核通过
+function batchApprove() {
+    const selected = [];
+    document.querySelectorAll('.delegate-checkbox:checked').forEach(cb => {
+        selected.push(parseInt(cb.value));
+    });
+    
+    if (selected.length === 0) {
+        alert('请先选择要审核的代表');
+        return;
+    }
+    
+    if (!confirm(`确定要一键通过选中的 ${selected.length} 位代表的申请吗？\n审核通过后将自动生成代表证编号。`)) {
+        return;
+    }
+    
+    fetch('/api/batch-approve', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({delegate_ids: selected})
+    })
+    .then(r => r.json())
+    .then(data => {
+        alert(data.message);
+        location.reload();
+    })
+    .catch(err => {
+        alert('批量审核失败：' + err);
+    });
+}
+
+// 手动补签（在列表中直接为未签到同学补签）
+function manualCheckin(delegateId, name) {
+    if (!confirm(`确定为 ${name} 补签吗？\n该学生之前未签到，补签后将标记为已签到。`)) {
+        return;
+    }
+    
+    fetch('/api/checkin-by-id', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({delegate_id: delegateId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('补签失败：' + data.message);
+        }
+    })
+    .catch(err => {
+        alert('补签失败：' + err);
     });
 }
 
