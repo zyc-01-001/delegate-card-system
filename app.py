@@ -97,94 +97,102 @@ def get_db():
 
 # 数据库初始化
 def init_db():
-    if USE_POSTGRESQL:
-        import psycopg2
-        from urllib.parse import urlparse
+    try:
+        if USE_POSTGRESQL:
+            import psycopg2
+            from urllib.parse import urlparse
 
-        parsed = urlparse(DATABASE_URL)
-        conn = psycopg2.connect(
-            database=parsed.path[1:],
-            user=parsed.username,
-            password=parsed.password,
-            host=parsed.hostname,
-            port=parsed.port
-        )
-        c = conn.cursor()
-
-        # 学生信息表
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS delegates (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                student_id TEXT NOT NULL UNIQUE,
-                gender TEXT,
-                political_status TEXT,
-                delegation TEXT NOT NULL,
-                delegation_type TEXT NOT NULL,
-                class_name TEXT,
-                photo_path TEXT,
-                status TEXT DEFAULT 'pending',
-                card_number TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                checked_in INTEGER DEFAULT 0,
-                check_in_time TIMESTAMP
+            parsed = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                database=parsed.path[1:],
+                user=parsed.username,
+                password=parsed.password,
+                host=parsed.hostname,
+                port=parsed.port
             )
-        ''')
+            c = conn.cursor()
 
-        # 管理员表
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS admins (
-                id SERIAL PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-            )
-        ''')
+            # 学生信息表
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS delegates (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    student_id TEXT NOT NULL UNIQUE,
+                    gender TEXT,
+                    political_status TEXT,
+                    delegation TEXT NOT NULL,
+                    delegation_type TEXT NOT NULL,
+                    class_name TEXT,
+                    photo_path TEXT,
+                    status TEXT DEFAULT 'pending',
+                    card_number TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    checked_in INTEGER DEFAULT 0,
+                    check_in_time TIMESTAMP
+                )
+            ''')
 
-        # 插入默认管理员
-        c.execute("""INSERT INTO admins (username, password) VALUES ('admin', 'admin123')
-                     ON CONFLICT DO NOTHING""")
+            # 管理员表
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS admins (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    password TEXT NOT NULL
+                )
+            ''')
 
-        conn.commit()
-        conn.close()
-    else:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
+            # 插入默认管理员
+            try:
+                c.execute("INSERT INTO admins (username, password) VALUES (%s, %s)",
+                          ('admin', 'admin123'))
+            except psycopg2.errors.UniqueViolation:
+                pass  # 管理员已存在
 
-        # 学生信息表
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS delegates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                student_id TEXT NOT NULL UNIQUE,
-                gender TEXT,
-                political_status TEXT,
-                delegation TEXT NOT NULL,
-                delegation_type TEXT NOT NULL,
-                class_name TEXT,
-                photo_path TEXT,
-                status TEXT DEFAULT 'pending',
-                card_number TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                checked_in INTEGER DEFAULT 0,
-                check_in_time TIMESTAMP
-            )
-        ''')
+            conn.commit()
+            conn.close()
+        else:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
 
-        # 管理员表
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS admins (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-            )
-        ''')
+            # 学生信息表
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS delegates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    student_id TEXT NOT NULL UNIQUE,
+                    gender TEXT,
+                    political_status TEXT,
+                    delegation TEXT NOT NULL,
+                    delegation_type TEXT NOT NULL,
+                    class_name TEXT,
+                    photo_path TEXT,
+                    status TEXT DEFAULT 'pending',
+                    card_number TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    checked_in INTEGER DEFAULT 0,
+                    check_in_time TIMESTAMP
+                )
+            ''')
 
-        # 插入默认管理员
-        c.execute("INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)",
-                  ('admin', 'admin123'))
+            # 管理员表
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS admins (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE,
+                    password TEXT NOT NULL
+                )
+            ''')
 
-        conn.commit()
-        conn.close()
+            # 插入默认管理员
+            c.execute("INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)",
+                      ('admin', 'admin123'))
+
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        print(f"数据库初始化错误: {e}")
+        import traceback
+        traceback.print_exc()
 
 # 生成代表证编号
 def generate_card_number():
