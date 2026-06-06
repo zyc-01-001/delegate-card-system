@@ -313,19 +313,27 @@
     <div class="checkin-section">
         <h3>⚡ 快速签到</h3>
         
-        <!-- 摄像头扫码 -->
+        <!-- 全屏扫码按钮 -->
+        <div style="margin-bottom: 15px; text-align: center;">
+            <button class="btn btn-success" onclick="enterFullscreenScan()" style="padding: 15px 30px; font-size: 18px; font-weight: bold; background: #28a745; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(40,167,69,0.3);">
+                📷 进入全屏扫码模式
+            </button>
+            <p style="color: #666; font-size: 13px; margin-top: 8px;">推荐：点击后全屏显示，学生排队扫码，自动完成签到</p>
+        </div>
+        
+        <!-- 摄像头扫码（内嵌模式） -->
         <div style="margin-bottom: 15px;">
             <button class="btn btn-info" onclick="toggleCamera()" style="margin-bottom: 10px;">📷 打开摄像头扫码</button>
             <div id="cameraContainer" style="display: none; text-align: center;">
                 <div id="cameraGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; margin-bottom: 10px;">
                     <div class="camera-box">
-                        <video id="cameraVideo" style="width: 100%; max-width: 640px; border-radius: 8px; border: 2px solid #C41E3A;" autoplay></video>
+                        <video id="cameraVideo" style="width: 100%; max-width: 640px; border-radius: 8px; border: 2px solid #C41E3A;" autoplay playsinline muted></video>
                         <p style="color: #666; font-size: 14px; margin-top: 5px;">主摄像头 - 将二维码对准摄像头</p>
                     </div>
                 </div>
                 <canvas id="cameraCanvas" style="display: none;"></canvas>
                 <div id="recentCheckins" style="margin: 15px 0; padding: 10px; background: #f0f9f0; border-radius: 8px; display: none;">
-                    <h4 style="color: #28a745; margin-bottom: 10px;">最近签到</h4>
+                    <h4 style="color: #28a745; margin-bottom: 10px;">✅ 最近签到 (<span id="checkinCount">0</span>人)</h4>
                     <div id="checkinList" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
                 </div>
                 <button class="btn btn-danger" onclick="stopCamera()" style="margin-top: 10px;">关闭摄像头</button>
@@ -350,6 +358,34 @@
         
         <div id="checkinResult" class="checkin-result"></div>
     </div>
+</div>
+
+<!-- 全屏扫码模式覆盖层 -->
+<div id="fullscreenScan" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 99999; flex-direction: column; align-items: center; justify-content: center;">
+    <div style="position: absolute; top: 15px; right: 15px; z-index: 10;">
+        <button onclick="exitFullscreenScan()" style="background: rgba(255,255,255,0.2); border: 2px solid white; color: white; padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer;">✕ 退出全屏</button>
+    </div>
+    <div style="position: absolute; top: 15px; left: 15px; z-index: 10; color: white; font-size: 24px; font-weight: bold;">
+        📷 扫码签到
+    </div>
+    <video id="fullscreenVideo" style="width: 100%; height: 100%; object-fit: cover;" autoplay playsinline muted></video>
+    <canvas id="fullscreenCanvas" style="display: none;"></canvas>
+    <!-- 扫描框 -->
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 280px; height: 280px; border: 3px solid rgba(255,255,255,0.8); border-radius: 20px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.6); font-size: 14px; text-align: center;">将二维码放入框内</div>
+        <div style="position: absolute; top: -2px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background: #28a745; border-radius: 2px;"></div>
+        <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background: #28a745; border-radius: 2px;"></div>
+        <div style="position: absolute; top: 50%; left: -2px; transform: translateY(-50%); width: 4px; height: 40px; background: #28a745; border-radius: 2px;"></div>
+        <div style="position: absolute; top: 50%; right: -2px; transform: translateY(-50%); width: 4px; height: 40px; background: #28a745; border-radius: 2px;"></div>
+    </div>
+    <!-- 签到结果提示 -->
+    <div id="fullscreenResult" style="position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10; text-align: center;"></div>
+    <!-- 最近签到列表 -->
+    <div id="fullscreenCheckins" style="position: absolute; bottom: 15px; left: 15px; right: 15px; z-index: 10; max-height: 60px; overflow: hidden;">
+        <div id="fullscreenCheckinList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+    </div>
+    <!-- 签到计数 -->
+    <div id="fullscreenCount" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 10; color: #28a745; font-size: 20px; font-weight: bold; display: none;">已签到: <span id="fsCount">0</span> 人</div>
 </div>
 
 <!-- 批量操作区域 -->
@@ -803,7 +839,184 @@ function exportData() {
     link.click();
 }
 
-// ========== 摄像头扫码签到 ==========
+// ========== 全屏扫码模式 ==========
+let fullscreenStream = null;
+let fullscreenScanning = false;
+let totalCheckinCount = 0;
+
+function enterFullscreenScan() {
+    const overlay = document.getElementById('fullscreenScan');
+    const video = document.getElementById('fullscreenVideo');
+    
+    overlay.style.display = 'flex';
+    
+    // 尝试全屏
+    if (overlay.requestFullscreen) {
+        overlay.requestFullscreen().catch(() => {});
+    }
+    
+    navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+    }).then(stream => {
+        fullscreenStream = stream;
+        video.srcObject = stream;
+        video.play();
+        fullscreenScanning = true;
+        totalCheckinCount = 0;
+        scanFullscreenQR();
+    }).catch(err => {
+        alert('无法访问摄像头：' + err.message);
+        exitFullscreenScan();
+    });
+}
+
+function exitFullscreenScan() {
+    fullscreenScanning = false;
+    if (fullscreenStream) {
+        fullscreenStream.getTracks().forEach(track => track.stop());
+        fullscreenStream = null;
+    }
+    document.getElementById('fullscreenVideo').srcObject = null;
+    document.getElementById('fullscreenScan').style.display = 'none';
+    
+    // 退出全屏
+    if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+    }
+    
+    // 刷新页面以更新列表
+    location.reload();
+}
+
+function scanFullscreenQR() {
+    if (!fullscreenScanning) return;
+    
+    const video = document.getElementById('fullscreenVideo');
+    const canvas = document.getElementById('fullscreenCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        try {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'dontInvert',
+            });
+            
+            if (code && code.data) {
+                const match = code.data.match(/checkin\/(\d+)/);
+                if (match) {
+                    const delegateId = parseInt(match[1]);
+                    
+                    if (isProcessingCheckin || recentScannedIds.has(delegateId)) {
+                        if (fullscreenScanning) requestAnimationFrame(() => setTimeout(scanFullscreenQR, 80));
+                        return;
+                    }
+                    
+                    recentScannedIds.add(delegateId);
+                    isProcessingCheckin = true;
+                    setTimeout(() => recentScannedIds.delete(delegateId), 3000);
+                    
+                    // 显示识别中
+                    showFullscreenResult('识别中...', '#fff');
+                    
+                    fetch('/api/checkin-by-id', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({delegate_id: delegateId})
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        isProcessingCheckin = false;
+                        if (data.success) {
+                            totalCheckinCount++;
+                            const name = data.delegate ? data.delegate.name : '';
+                            
+                            if (data.already) {
+                                showFullscreenResult(name + ' - 已签到过', '#ffc107');
+                                playSound('warning');
+                            } else {
+                                showFullscreenResult('✅ ' + name + ' 签到成功!', '#28a745');
+                                playSound('success');
+                                addFullscreenCheckin(name);
+                            }
+                            
+                            // 更新计数
+                            document.getElementById('fsCount').textContent = totalCheckinCount;
+                            document.getElementById('fullscreenCount').style.display = 'block';
+                        } else {
+                            showFullscreenResult('❌ ' + data.message, '#dc3545');
+                            playSound('error');
+                        }
+                    })
+                    .catch(err => {
+                        isProcessingCheckin = false;
+                        showFullscreenResult('签到失败', '#dc3545');
+                    });
+                    
+                    if (fullscreenScanning) requestAnimationFrame(() => setTimeout(scanFullscreenQR, 150));
+                    return;
+                }
+            }
+        } catch (e) {}
+    }
+    
+    if (fullscreenScanning) requestAnimationFrame(() => setTimeout(scanFullscreenQR, 80));
+}
+
+function showFullscreenResult(text, color) {
+    const el = document.getElementById('fullscreenResult');
+    el.innerHTML = `<div style="background: ${color}; color: white; padding: 12px 30px; border-radius: 30px; font-size: 20px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: fadeInOut 2s forwards;">${text}</div>
+    <style>@keyframes fadeInOut { 0% { opacity: 0; transform: translateY(10px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 100% { opacity: 0; } }</style>`;
+}
+
+function addFullscreenCheckin(name) {
+    const list = document.getElementById('fullscreenCheckinList');
+    const badge = document.createElement('span');
+    badge.style.cssText = 'background: rgba(40,167,69,0.8); color: white; padding: 4px 10px; border-radius: 15px; font-size: 13px;';
+    badge.textContent = name + ' ✓';
+    list.insertBefore(badge, list.firstChild);
+    while (list.children.length > 15) list.removeChild(list.lastChild);
+}
+
+// ========== 声音提示 ==========
+function playSound(type) {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        if (type === 'success') {
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(1100, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'warning') {
+            oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(440, audioCtx.currentTime + 0.15);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        } else {
+            oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(200, audioCtx.currentTime + 0.15);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        }
+    } catch (e) {}
+}
+
+// ========== 摄像头扫码（内嵌模式）==========
 let cameraStream = null;
 let scanning = false;
 
