@@ -269,32 +269,33 @@ def apply_success():
 
 @app.route('/query', methods=['GET', 'POST'])
 def query():
-    delegate = None
-    qr_base64 = None
-    if request.method == 'POST':
-        name = request.form['name']
-        student_id = request.form['student_id']
+    try:
+        delegate = None
+        qr_base64 = None
+        if request.method == 'POST':
+            name = request.form['name']
+            student_id = request.form['student_id']
 
-        try:
             db = get_db()
             c = db.execute("SELECT * FROM delegates WHERE name = ? AND student_id = ?",
                            (name, student_id))
             delegate = c.fetchone()
             db.close()
-        except Exception as e:
-            return f"<h1>查询错误</h1><pre>{type(e).__name__}: {e}</pre>", 500
 
-        if not delegate:
-            flash('未找到相关代表信息，请检查姓名和学号是否正确。', 'error')
-        elif delegate['status'] == 'approved':
-            # 生成签到二维码
-            check_in_url = request.url_root + 'checkin/' + str(delegate['id'])
-            qr_img = generate_qr_code(check_in_url)
-            buffer = io.BytesIO()
-            qr_img.save(buffer, format='PNG')
-            qr_base64 = base64.b64encode(buffer.getvalue()).decode()
+            if not delegate:
+                flash('未找到相关代表信息，请检查姓名和学号是否正确。', 'error')
+            elif delegate['status'] == 'approved':
+                # 生成签到二维码
+                check_in_url = request.url_root + 'checkin/' + str(delegate['id'])
+                qr_img = generate_qr_code(check_in_url)
+                buffer = io.BytesIO()
+                qr_img.save(buffer, format='PNG')
+                qr_base64 = base64.b64encode(buffer.getvalue()).decode()
 
-    return render_template('query.html', delegate=delegate, qr_base64=qr_base64)
+        return render_template('query.html', delegate=delegate, qr_base64=qr_base64)
+    except Exception as e:
+        import traceback
+        return f"<h1>查询页面错误</h1><pre>{type(e).__name__}: {e}\n\n{traceback.format_exc()}</pre>", 500
 
 @app.route('/card/<int:delegate_id>')
 def show_card(delegate_id):
