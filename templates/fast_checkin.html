@@ -1,0 +1,347 @@
+{% extends 'base.html' %}
+
+{% block title %}快速核销签到{% endblock %}
+
+{% block extra_css %}
+<style>
+    .checkin-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 15px;
+        margin-top: 20px;
+    }
+    .student-card {
+        background: white;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 2px solid #e0e0e0;
+        transition: all 0.2s;
+        position: relative;
+    }
+    .student-card:hover {
+        border-color: #C41E3A;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(196,30,58,0.15);
+    }
+    .student-card.checked {
+        opacity: 0.4;
+        border-color: #28a745;
+        background: #f0f9f0;
+    }
+    .student-card .photo {
+        width: 80px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 8px;
+        float: left;
+        margin-right: 12px;
+    }
+    .student-card .info {
+        overflow: hidden;
+    }
+    .student-card .name {
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 4px;
+    }
+    .student-card .detail {
+        font-size: 13px;
+        color: #666;
+        line-height: 1.6;
+    }
+    .student-card .btn-checkin {
+        width: 100%;
+        margin-top: 12px;
+        padding: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .student-card .btn-checkin.btn-green {
+        background: #28a745;
+        color: white;
+    }
+    .student-card .btn-checkin.btn-green:hover {
+        background: #218838;
+    }
+    .student-card .btn-checkin:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+    .stats-bar {
+        background: linear-gradient(135deg, #C41E3A, #8B0000);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .stats-bar .stat {
+        text-align: center;
+    }
+    .stats-bar .stat-number {
+        font-size: 32px;
+        font-weight: bold;
+    }
+    .stats-bar .stat-label {
+        font-size: 13px;
+        opacity: 0.9;
+    }
+    .filter-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+    .filter-bar button {
+        padding: 8px 16px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .filter-bar button.active {
+        background: #C41E3A;
+        color: white;
+        border-color: #C41E3A;
+    }
+    .search-box {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        margin-bottom: 15px;
+    }
+    .search-box:focus {
+        outline: none;
+        border-color: #C41E3A;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+    .empty-state .icon {
+        font-size: 64px;
+        margin-bottom: 15px;
+    }
+    @keyframes checkinPulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(0.95); }
+        100% { transform: scale(1); }
+    }
+    .checking {
+        animation: checkinPulse 0.3s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stats-bar">
+    <div class="stat">
+        <div class="stat-number" id="statTotal">{{ total }}</div>
+        <div class="stat-label">总人数</div>
+    </div>
+    <div class="stat">
+        <div class="stat-number" id="statChecked">{{ checked_in }}</div>
+        <div class="stat-label">已签到</div>
+    </div>
+    <div class="stat">
+        <div class="stat-number" id="statUnchecked">{{ total - checked_in }}</div>
+        <div class="stat-label">未签到</div>
+    </div>
+    <div>
+        <button onclick="refreshData()" style="background: rgba(255,255,255,0.2); border: 2px solid white; color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px;">🔄 刷新数据</button>
+        <a href="/admin" style="background: rgba(255,255,255,0.2); border: 2px solid white; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; display: inline-block;">返回后台</a>
+    </div>
+</div>
+
+<h2 style="margin-bottom: 10px;">⚡ 快速核销签到</h2>
+<p style="color: #666; margin-bottom: 15px;">请核对学生本人与照片一致后，点击"确认签到"按钮</p>
+
+<input type="text" class="search-box" id="searchBox" placeholder="🔍 输入姓名或学号快速查找..." oninput="filterStudents()">
+
+<div class="filter-bar">
+    <button class="active" onclick="setFilter('unchecked')" id="filterUnchecked">未签到 ({{ total - checked_in }})</button>
+    <button onclick="setFilter('all')" id="filterAll">全部 ({{ total }})</button>
+    <button onclick="setFilter('checked')" id="filterChecked">已签到 ({{ checked_in }})</button>
+</div>
+
+<div class="checkin-grid" id="studentGrid">
+    {% for d in delegates %}
+    <div class="student-card {% if d.checked_in %}checked{% endif %}" data-name="{{ d.name }}" data-id="{{ d.student_id }}" data-status="{% if d.checked_in %}checked{% else %}unchecked{% endif %}">
+        {% if d.photo_path %}
+        <img src="{{ url_for('static', filename=d.photo_path.replace('static/', '')) }}" class="photo" alt="照片">
+        {% else %}
+        <div class="photo" style="background: #eee; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px;">无照片</div>
+        {% endif %}
+        <div class="info">
+            <div class="name">{{ d.name }}</div>
+            <div class="detail">
+                学号: {{ d.student_id }}<br>
+                {{ d.delegation }} | {{ d.delegation_type }}<br>
+                {% if d.class_name %}{{ d.class_name }}{% endif %}
+            </div>
+        </div>
+        <div style="clear: both;"></div>
+        {% if d.checked_in %}
+        <button class="btn-checkin" disabled>✅ 已签到 {{ d.check_in_time[:16] if d.check_in_time else '' }}</button>
+        {% else %}
+        <button class="btn-checkin btn-green" onclick="quickCheckin({{ d.id }}, this)" data-id="{{ d.id }}">✓ 确认签到</button>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<div class="empty-state" id="emptyState" style="display: none;">
+    <div class="icon">🎉</div>
+    <h3>所有学生已完成签到！</h3>
+</div>
+
+<script>
+let currentFilter = 'unchecked';
+
+function quickCheckin(delegateId, btn) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '处理中...';
+    btn.classList.add('checking');
+    
+    fetch('/api/checkin-by-id', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({delegate_id: delegateId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const card = btn.closest('.student-card');
+            card.classList.add('checked');
+            card.setAttribute('data-status', 'checked');
+            btn.textContent = '✅ 已签到 ' + (data.delegate.check_in_time ? data.delegate.check_in_time.substring(0,16) : '');
+            btn.classList.remove('btn-green');
+            btn.style.background = '#28a745';
+            btn.style.color = 'white';
+            
+            // 播放提示音
+            playBeep();
+            
+            // 更新统计
+            updateStats();
+            
+            // 如果当前筛选是"未签到"，延迟后隐藏该卡片
+            if (currentFilter === 'unchecked') {
+                setTimeout(() => {
+                    card.style.display = 'none';
+                    checkEmpty();
+                }, 500);
+            }
+        } else {
+            btn.disabled = false;
+            btn.textContent = '✓ 确认签到';
+            alert(data.message);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.textContent = '✓ 确认签到';
+        alert('签到失败：' + err);
+    });
+}
+
+function playBeep() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.3);
+    } catch(e) {}
+}
+
+function updateStats() {
+    const total = document.querySelectorAll('.student-card').length;
+    const checked = document.querySelectorAll('.student-card.checked').length;
+    const unchecked = total - checked;
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statChecked').textContent = checked;
+    document.getElementById('statUnchecked').textContent = unchecked;
+    document.getElementById('filterUnchecked').textContent = '未签到 (' + unchecked + ')';
+    document.getElementById('filterAll').textContent = '全部 (' + total + ')';
+    document.getElementById('filterChecked').textContent = '已签到 (' + checked + ')';
+}
+
+function setFilter(type) {
+    currentFilter = type;
+    document.querySelectorAll('.filter-bar button').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter' + (type === 'unchecked' ? 'Unchecked' : type === 'checked' ? 'Checked' : 'All')).classList.add('active');
+    
+    document.querySelectorAll('.student-card').forEach(card => {
+        if (type === 'all') {
+            card.style.display = '';
+        } else if (type === 'unchecked') {
+            card.style.display = card.classList.contains('checked') ? 'none' : '';
+        } else {
+            card.style.display = card.classList.contains('checked') ? '' : 'none';
+        }
+    });
+    checkEmpty();
+}
+
+function filterStudents() {
+    const keyword = document.getElementById('searchBox').value.trim().toLowerCase();
+    document.querySelectorAll('.student-card').forEach(card => {
+        const name = card.getAttribute('data-name').toLowerCase();
+        const id = card.getAttribute('data-id').toLowerCase();
+        if (name.includes(keyword) || id.includes(keyword)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    checkEmpty();
+}
+
+function checkEmpty() {
+    const visible = document.querySelectorAll('.student-card:not([style*="display: none"])');
+    document.getElementById('emptyState').style.display = visible.length === 0 ? 'block' : 'none';
+}
+
+function refreshData() {
+    location.reload();
+}
+
+// 每10秒自动刷新一次数据（同步其他管理员的核销）
+setInterval(() => {
+    fetch('/api/stats')
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('statChecked').textContent = data.checked_in;
+            document.getElementById('statUnchecked').textContent = data.total - data.checked_in;
+        }
+    })
+    .catch(() => {});
+}, 10000);
+
+// 初始检查空状态
+checkEmpty();
+</script>
+{% endblock %}

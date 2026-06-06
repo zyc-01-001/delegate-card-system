@@ -3,8 +3,7 @@
 {% block title %}管理后台{% endblock %}
 
 {% block extra_css %}
-<!-- jsQR 二维码扫描库 -->
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
 <style>
     .stats-grid {
         display: grid;
@@ -308,84 +307,60 @@
     </div>
 </div>
 
-<!-- 快速签到区域 -->
+<!-- 快速核销区域 -->
 <div class="card">
     <div class="checkin-section">
-        <h3>⚡ 快速签到</h3>
+        <h3>⚡ 快速核销签到</h3>
+        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+            💡 <strong>核销流程：</strong>学生出示代表证 → 管理员核对照片和身份信息 → 点击"核销签到"按钮完成签到
+        </p>
         
-        <!-- 全屏扫码按钮 -->
-        <div style="margin-bottom: 15px; text-align: center;">
-            <button class="btn btn-success" onclick="enterFullscreenScan()" style="padding: 15px 30px; font-size: 18px; font-weight: bold; background: #28a745; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(40,167,69,0.3);">
-                📷 进入全屏扫码模式
-            </button>
-            <p style="color: #666; font-size: 13px; margin-top: 8px;">推荐：点击后全屏显示，学生排队扫码，自动完成签到</p>
-        </div>
-        
-        <!-- 摄像头扫码（内嵌模式） -->
-        <div style="margin-bottom: 15px;">
-            <button class="btn btn-info" onclick="toggleCamera()" style="margin-bottom: 10px;">📷 打开摄像头扫码</button>
-            <div id="cameraContainer" style="display: none; text-align: center;">
-                <div id="cameraGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; margin-bottom: 10px;">
-                    <div class="camera-box">
-                        <video id="cameraVideo" style="width: 100%; max-width: 640px; border-radius: 8px; border: 2px solid #C41E3A;" autoplay playsinline muted></video>
-                        <p style="color: #666; font-size: 14px; margin-top: 5px;">主摄像头 - 将二维码对准摄像头</p>
-                    </div>
-                </div>
-                <canvas id="cameraCanvas" style="display: none;"></canvas>
-                <div id="recentCheckins" style="margin: 15px 0; padding: 10px; background: #f0f9f0; border-radius: 8px; display: none;">
-                    <h4 style="color: #28a745; margin-bottom: 10px;">✅ 最近签到 (<span id="checkinCount">0</span>人)</h4>
-                    <div id="checkinList" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
-                </div>
-                <button class="btn btn-danger" onclick="stopCamera()" style="margin-top: 10px;">关闭摄像头</button>
-            </div>
-        </div>
-        
-        <!-- 手动输入 -->
-        <div class="checkin-input">
-            <input type="text" id="cardNumberInput" placeholder="输入代表证编号（如：DA20250001）" autofocus>
-            <button class="btn btn-success" onclick="checkinByCard()">签到</button>
-        </div>
-        
-        <!-- 搜索签到 -->
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-            <p style="color: #666; font-size: 14px; margin-bottom: 10px;">或通过姓名/学号查找签到：</p>
+        <!-- 快速搜索核销 - 最常用 -->
+        <div style="background: #fff3cd; padding: 15px; border-radius: 10px; border: 2px solid #ffc107; margin-bottom: 15px;">
+            <p style="color: #856404; font-weight: bold; margin-bottom: 10px;">🔍 方式一：快速搜索核销（推荐）</p>
             <div class="checkin-input">
-                <input type="text" id="searchInput" placeholder="输入姓名或学号搜索...">
-                <button class="btn btn-primary" onclick="searchAndCheckin()">查找并签到</button>
+                <input type="text" id="fastSearchInput" placeholder="输入学号或姓名，回车直接核销..." autofocus style="border-color: #ffc107;">
+                <button class="btn btn-warning" onclick="fastSearchAndVerify()" style="background: #ffc107; color: #333; border: none; font-weight: bold;">🔍 查找</button>
             </div>
-            <div id="searchResults" style="margin-top: 10px;"></div>
+            <p style="color: #856404; font-size: 12px; margin-top: 5px;">提示：输入学号或姓名后按回车，系统会显示学生信息和照片，确认无误后点击核销</p>
+            <div id="fastSearchResults" style="margin-top: 10px;"></div>
+        </div>
+        
+        <!-- 代表证编号核销 -->
+        <div style="background: #d1ecf1; padding: 15px; border-radius: 10px; border: 2px solid #17a2b8; margin-bottom: 15px;">
+            <p style="color: #0c5460; font-weight: bold; margin-bottom: 10px;">🎫 方式二：代表证编号核销</p>
+            <div class="checkin-input">
+                <input type="text" id="cardNumberInput" placeholder="输入代表证编号（如：20250001）" style="border-color: #17a2b8;">
+                <button class="btn btn-info" onclick="checkinByCard()" style="font-weight: bold;">核销签到</button>
+            </div>
+            <p style="color: #0c5460; font-size: 12px; margin-top: 5px;">提示：查看学生代表证上的编号，输入后自动完成核销</p>
+        </div>
+        
+        <!-- 高级搜索 -->
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <p style="color: #666; font-size: 14px; margin-bottom: 10px; cursor: pointer;" onclick="toggleAdvancedSearch()">
+                🔽 高级搜索（按代表团、类型筛选）
+            </p>
+            <div id="advancedSearch" style="display: none;">
+                <div class="checkin-input">
+                    <input type="text" id="searchInput" placeholder="输入姓名或学号搜索...">
+                    <select id="searchDelegationFilter" style="padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                        <option value="">全部代表团</option>
+                        <option value="第一代表团">第一代表团</option>
+                        <option value="第二代表团">第二代表团</option>
+                        <option value="第三代表团">第三代表团</option>
+                        <option value="第四代表团">第四代表团</option>
+                        <option value="列席代表团">列席代表团</option>
+                        <option value="旁听席">旁听席</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="searchAndCheckin()">查找</button>
+                </div>
+                <div id="searchResults" style="margin-top: 10px;"></div>
+            </div>
         </div>
         
         <div id="checkinResult" class="checkin-result"></div>
     </div>
-</div>
-
-<!-- 全屏扫码模式覆盖层 -->
-<div id="fullscreenScan" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 99999; flex-direction: column; align-items: center; justify-content: center;">
-    <div style="position: absolute; top: 15px; right: 15px; z-index: 10;">
-        <button onclick="exitFullscreenScan()" style="background: rgba(255,255,255,0.2); border: 2px solid white; color: white; padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer;">✕ 退出全屏</button>
-    </div>
-    <div style="position: absolute; top: 15px; left: 15px; z-index: 10; color: white; font-size: 24px; font-weight: bold;">
-        📷 扫码签到
-    </div>
-    <video id="fullscreenVideo" style="width: 100%; height: 100%; object-fit: cover;" autoplay playsinline muted></video>
-    <canvas id="fullscreenCanvas" style="display: none;"></canvas>
-    <!-- 扫描框 -->
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 280px; height: 280px; border: 3px solid rgba(255,255,255,0.8); border-radius: 20px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.6); font-size: 14px; text-align: center;">将二维码放入框内</div>
-        <div style="position: absolute; top: -2px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background: #28a745; border-radius: 2px;"></div>
-        <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background: #28a745; border-radius: 2px;"></div>
-        <div style="position: absolute; top: 50%; left: -2px; transform: translateY(-50%); width: 4px; height: 40px; background: #28a745; border-radius: 2px;"></div>
-        <div style="position: absolute; top: 50%; right: -2px; transform: translateY(-50%); width: 4px; height: 40px; background: #28a745; border-radius: 2px;"></div>
-    </div>
-    <!-- 签到结果提示 -->
-    <div id="fullscreenResult" style="position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10; text-align: center;"></div>
-    <!-- 最近签到列表 -->
-    <div id="fullscreenCheckins" style="position: absolute; bottom: 15px; left: 15px; right: 15px; z-index: 10; max-height: 60px; overflow: hidden;">
-        <div id="fullscreenCheckinList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
-    </div>
-    <!-- 签到计数 -->
-    <div id="fullscreenCount" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 10; color: #28a745; font-size: 20px; font-weight: bold; display: none;">已签到: <span id="fsCount">0</span> 人</div>
 </div>
 
 <!-- 批量操作区域 -->
@@ -503,38 +478,7 @@
 </div>
 
 <script>
-// 快速签到
-function checkinByCard() {
-    const cardNumber = document.getElementById('cardNumberInput').value.trim();
-    if (!cardNumber) {
-        showCheckinResult('请输入代表证编号', 'error');
-        return;
-    }
-    
-    fetch('/api/checkin-by-card', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({card_number: cardNumber})
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            const type = data.already ? 'info' : 'success';
-            showCheckinResult(data.message + (data.delegate ? ` - ${data.delegate.name} (${data.delegate.student_id})` : ''), type);
-            if (!data.already) {
-                setTimeout(() => location.reload(), 1500);
-            }
-        } else {
-            showCheckinResult(data.message, 'error');
-        }
-    })
-    .catch(err => {
-        showCheckinResult('签到失败：' + err, 'error');
-    });
-    
-    document.getElementById('cardNumberInput').value = '';
-    document.getElementById('cardNumberInput').focus();
-}
+// ========== 核销签到功能 ==========
 
 function showCheckinResult(message, type) {
     const result = document.getElementById('checkinResult');
@@ -542,12 +486,247 @@ function showCheckinResult(message, type) {
     result.textContent = message;
 }
 
-// 回车签到
+// 方式一：快速搜索核销（推荐）
+function fastSearchAndVerify() {
+    const keyword = document.getElementById('fastSearchInput').value.trim();
+    const resultsDiv = document.getElementById('fastSearchResults');
+    
+    if (!keyword) {
+        resultsDiv.innerHTML = '<p style="color: #C41E3A;">请输入学号或姓名</p>';
+        return;
+    }
+    
+    resultsDiv.innerHTML = '<p style="color: #666;">搜索中...</p>';
+    
+    fetch('/api/search-delegate?keyword=' + encodeURIComponent(keyword))
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            resultsDiv.innerHTML = '<p style="color: #C41E3A;">' + data.message + '</p>';
+            return;
+        }
+        
+        if (data.count === 0) {
+            resultsDiv.innerHTML = '<p style="color: #666;">未找到匹配的代表，请检查学号或姓名是否正确</p>';
+            return;
+        }
+        
+        // 如果只找到一个，直接显示核销卡片
+        if (data.count === 1) {
+            showVerifyCard(data.results[0], resultsDiv);
+        } else {
+            // 多个结果，显示列表选择
+            let html = '<div style="max-height: 400px; overflow-y: auto;">';
+            html += '<p style="color: #856404; margin-bottom: 10px;">找到 ' + data.count + ' 个结果，请点击选择要核销的学生：</p>';
+            data.results.forEach(d => {
+                const statusText = d.status === 'pending' ? '待审核' : (d.status === 'approved' ? '已通过' : '已拒绝');
+                const checkinText = d.checked_in ? '✅ 已签到' : '⏳ 未签到';
+                const canVerify = d.status === 'approved' && !d.checked_in;
+                
+                html += `
+                    <div style="padding: 12px; border: 2px solid #eee; border-radius: 10px; margin-bottom: 10px; cursor: pointer; ${canVerify ? 'background: #f8fff8;' : 'background: #f5f5f5; opacity: 0.7;'}" 
+                         onclick="selectForVerify(${d.id})" onmouseover="this.style.borderColor='#ffc107'" onmouseout="this.style.borderColor='#eee'">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            ${d.photo_path ? '<img src="/' + d.photo_path + '" style="width: 60px; height: 80px; object-fit: cover; border-radius: 6px; border: 2px solid #C41E3A;">' : '<div style="width: 60px; height: 80px; background: #eee; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px;">无照片</div>'}
+                            <div style="flex: 1;">
+                                <strong style="font-size: 16px;">${d.name}</strong> <span style="color: #666;">(${d.student_id})</span><br>
+                                <small style="color: #666;">${d.delegation} | ${d.delegation_type} | ${statusText} | ${checkinText}</small>
+                            </div>
+                            <div>
+                                ${canVerify 
+                                    ? '<span style="color: #28a745; font-weight: bold;">✓ 可核销</span>'
+                                    : (d.checked_in 
+                                        ? '<span style="color: #999;">已核销</span>'
+                                        : '<span style="color: #C41E3A;">不可核销</span>')
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            resultsDiv.innerHTML = html;
+        }
+    })
+    .catch(err => {
+        resultsDiv.innerHTML = '<p style="color: #C41E3A;">搜索失败：' + err + '</p>';
+    });
+}
+
+// 显示核销卡片（带照片核对）
+function showVerifyCard(delegate, container) {
+    const statusText = delegate.status === 'pending' ? '待审核' : (delegate.status === 'approved' ? '已通过' : '已拒绝');
+    const canVerify = delegate.status === 'approved' && !delegate.checked_in;
+    
+    let html = `
+        <div style="background: white; border: 3px solid ${canVerify ? '#28a745' : '#dc3545'}; border-radius: 16px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <h4 style="text-align: center; color: #C41E3A; margin-bottom: 15px;">🎫 代表证核销确认</h4>
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+                <div style="text-align: center;">
+                    ${delegate.photo_path 
+                        ? '<img src="/' + delegate.photo_path + '" style="width: 120px; height: 160px; object-fit: cover; border-radius: 10px; border: 3px solid #C41E3A;">'
+                        : '<div style="width: 120px; height: 160px; background: #f5f5f5; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #999; border: 2px dashed #ccc;">无照片</div>'
+                    }
+                    <p style="color: #666; font-size: 12px; margin-top: 5px;">请核对照片是否为本人</p>
+                </div>
+                <div style="flex: 1;">
+                    <div style="display: grid; grid-template-columns: 80px 1fr; gap: 10px; font-size: 15px;">
+                        <span style="color: #666;">姓名：</span><strong>${delegate.name}</strong>
+                        <span style="color: #666;">学号：</span><strong>${delegate.student_id}</strong>
+                        <span style="color: #666;">代表团：</span><span>${delegate.delegation}</span>
+                        <span style="color: #666;">类型：</span><span>${delegate.delegation_type}</span>
+                        <span style="color: #666;">状态：</span><span style="color: ${delegate.status === 'approved' ? '#28a745' : '#C41E3A'};">${statusText}</span>
+                        <span style="color: #666;">签到：</span><span style="color: ${delegate.checked_in ? '#28a745' : '#999'};">${delegate.checked_in ? '✅ 已签到' : '⏳ 未签到'}</span>
+                        ${delegate.card_number ? '<span style="color: #666;">证号：</span><span>' + delegate.card_number + '</span>' : ''}
+                    </div>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                ${canVerify 
+                    ? `<button class="btn btn-success" onclick="confirmVerify(${delegate.id}, '${delegate.name}')" style="padding: 12px 40px; font-size: 18px; font-weight: bold; background: #28a745; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 12px rgba(40,167,69,0.3);">
+                        ✓ 确认核销签到
+                       </button>
+                       <p style="color: #666; font-size: 13px; margin-top: 10px;">请核对照片和身份信息无误后点击确认</p>`
+                    : `<button class="btn btn-secondary" disabled style="padding: 12px 40px; font-size: 18px; opacity: 0.6; cursor: not-allowed;">
+                        ${delegate.checked_in ? '✓ 已核销' : '✗ 不可核销'}
+                       </button>
+                       <p style="color: #C41E3A; font-size: 13px; margin-top: 10px;">${delegate.checked_in ? '该学生已完成签到' : '该学生未通过审核，无法核销'}</p>`
+                }
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// 选择学生进行核销
+function selectForVerify(delegateId) {
+    const resultsDiv = document.getElementById('fastSearchResults');
+    resultsDiv.innerHTML = '<p style="color: #666;">加载中...</p>';
+    
+    fetch('/api/search-delegate?keyword=' + encodeURIComponent(delegateId))
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.results.length > 0) {
+            const delegate = data.results.find(d => d.id === delegateId) || data.results[0];
+            showVerifyCard(delegate, resultsDiv);
+        }
+    });
+}
+
+// 确认核销
+function confirmVerify(delegateId, name) {
+    if (!confirm(`确定要为 ${name} 核销签到吗？\n请确认已核对照片和身份信息。`)) {
+        return;
+    }
+    
+    fetch('/api/checkin-by-id', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({delegate_id: delegateId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const type = data.already ? 'info' : 'success';
+            showCheckinResult(data.message, type);
+            
+            // 显示核销成功卡片
+            const resultsDiv = document.getElementById('fastSearchResults');
+            resultsDiv.innerHTML = `
+                <div style="background: #d4edda; border: 2px solid #28a745; border-radius: 12px; padding: 20px; text-align: center; margin-top: 15px;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
+                    <h3 style="color: #155724; margin-bottom: 10px;">${data.message}</h3>
+                    <p style="color: #155724;">${data.delegate.name} (${data.delegate.student_id})</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 10px;">核销时间：${data.delegate.check_in_time}</p>
+                </div>
+            `;
+            
+            // 播放成功音效
+            playSound('success');
+            
+            // 清空输入框，准备下一个
+            setTimeout(() => {
+                document.getElementById('fastSearchInput').value = '';
+                document.getElementById('fastSearchInput').focus();
+                resultsDiv.innerHTML = '';
+            }, 2000);
+            
+            // 刷新页面数据
+            setTimeout(() => location.reload(), 2500);
+        } else {
+            showCheckinResult(data.message, 'error');
+            playSound('error');
+        }
+    })
+    .catch(err => {
+        showCheckinResult('核销失败：' + err, 'error');
+        playSound('error');
+    });
+}
+
+// 方式二：代表证编号核销
+function checkinByCard() {
+    const cardNumber = document.getElementById('cardNumberInput').value.trim();
+    if (!cardNumber) {
+        showCheckinResult('请输入代表证编号', 'error');
+        return;
+    }
+    
+    // 先搜索该编号对应的学生，显示核销卡片
+    fetch('/api/checkin-by-card', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({card_number: cardNumber})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.delegate) {
+            // 显示核销确认卡片
+            const delegate = {
+                id: data.delegate.id || 0,
+                name: data.delegate.name,
+                student_id: data.delegate.student_id,
+                card_number: cardNumber,
+                checked_in: data.already,
+                status: 'approved',
+                photo_path: data.delegate.photo_path || '',
+                delegation: data.delegate.delegation || '',
+                delegation_type: data.delegate.delegation_type || ''
+            };
+            showVerifyCard(delegate, document.getElementById('fastSearchResults'));
+            showCheckinResult(data.message, data.already ? 'info' : 'success');
+        } else {
+            showCheckinResult(data.message, 'error');
+        }
+    })
+    .catch(err => {
+        showCheckinResult('核销查询失败：' + err, 'error');
+    });
+    
+    document.getElementById('cardNumberInput').value = '';
+    document.getElementById('cardNumberInput').focus();
+}
+
+// 回车触发快速搜索
+document.getElementById('fastSearchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        fastSearchAndVerify();
+    }
+});
+
+// 回车触发编号核销
 document.getElementById('cardNumberInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         checkinByCard();
     }
 });
+
+// 切换高级搜索
+function toggleAdvancedSearch() {
+    const el = document.getElementById('advancedSearch');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
 
 // 全选
 function toggleSelectAll() {
@@ -839,149 +1018,6 @@ function exportData() {
     link.click();
 }
 
-// ========== 全屏扫码模式 ==========
-let fullscreenStream = null;
-let fullscreenScanning = false;
-let totalCheckinCount = 0;
-
-function enterFullscreenScan() {
-    const overlay = document.getElementById('fullscreenScan');
-    const video = document.getElementById('fullscreenVideo');
-    
-    overlay.style.display = 'flex';
-    
-    // 尝试全屏
-    if (overlay.requestFullscreen) {
-        overlay.requestFullscreen().catch(() => {});
-    }
-    
-    navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
-    }).then(stream => {
-        fullscreenStream = stream;
-        video.srcObject = stream;
-        video.play();
-        fullscreenScanning = true;
-        totalCheckinCount = 0;
-        scanFullscreenQR();
-    }).catch(err => {
-        alert('无法访问摄像头：' + err.message);
-        exitFullscreenScan();
-    });
-}
-
-function exitFullscreenScan() {
-    fullscreenScanning = false;
-    if (fullscreenStream) {
-        fullscreenStream.getTracks().forEach(track => track.stop());
-        fullscreenStream = null;
-    }
-    document.getElementById('fullscreenVideo').srcObject = null;
-    document.getElementById('fullscreenScan').style.display = 'none';
-    
-    // 退出全屏
-    if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-    }
-    
-    // 刷新页面以更新列表
-    location.reload();
-}
-
-function scanFullscreenQR() {
-    if (!fullscreenScanning) return;
-    
-    const video = document.getElementById('fullscreenVideo');
-    const canvas = document.getElementById('fullscreenCanvas');
-    const ctx = canvas.getContext('2d');
-    
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        try {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'dontInvert',
-            });
-            
-            if (code && code.data) {
-                const match = code.data.match(/checkin\/(\d+)/);
-                if (match) {
-                    const delegateId = parseInt(match[1]);
-                    
-                    if (isProcessingCheckin || recentScannedIds.has(delegateId)) {
-                        if (fullscreenScanning) requestAnimationFrame(() => setTimeout(scanFullscreenQR, 80));
-                        return;
-                    }
-                    
-                    recentScannedIds.add(delegateId);
-                    isProcessingCheckin = true;
-                    setTimeout(() => recentScannedIds.delete(delegateId), 3000);
-                    
-                    // 显示识别中
-                    showFullscreenResult('识别中...', '#fff');
-                    
-                    fetch('/api/checkin-by-id', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({delegate_id: delegateId})
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        isProcessingCheckin = false;
-                        if (data.success) {
-                            totalCheckinCount++;
-                            const name = data.delegate ? data.delegate.name : '';
-                            
-                            if (data.already) {
-                                showFullscreenResult(name + ' - 已签到过', '#ffc107');
-                                playSound('warning');
-                            } else {
-                                showFullscreenResult('✅ ' + name + ' 签到成功!', '#28a745');
-                                playSound('success');
-                                addFullscreenCheckin(name);
-                            }
-                            
-                            // 更新计数
-                            document.getElementById('fsCount').textContent = totalCheckinCount;
-                            document.getElementById('fullscreenCount').style.display = 'block';
-                        } else {
-                            showFullscreenResult('❌ ' + data.message, '#dc3545');
-                            playSound('error');
-                        }
-                    })
-                    .catch(err => {
-                        isProcessingCheckin = false;
-                        showFullscreenResult('签到失败', '#dc3545');
-                    });
-                    
-                    if (fullscreenScanning) requestAnimationFrame(() => setTimeout(scanFullscreenQR, 150));
-                    return;
-                }
-            }
-        } catch (e) {}
-    }
-    
-    if (fullscreenScanning) requestAnimationFrame(() => setTimeout(scanFullscreenQR, 80));
-}
-
-function showFullscreenResult(text, color) {
-    const el = document.getElementById('fullscreenResult');
-    el.innerHTML = `<div style="background: ${color}; color: white; padding: 12px 30px; border-radius: 30px; font-size: 20px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: fadeInOut 2s forwards;">${text}</div>
-    <style>@keyframes fadeInOut { 0% { opacity: 0; transform: translateY(10px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 100% { opacity: 0; } }</style>`;
-}
-
-function addFullscreenCheckin(name) {
-    const list = document.getElementById('fullscreenCheckinList');
-    const badge = document.createElement('span');
-    badge.style.cssText = 'background: rgba(40,167,69,0.8); color: white; padding: 4px 10px; border-radius: 15px; font-size: 13px;';
-    badge.textContent = name + ' ✓';
-    list.insertBefore(badge, list.firstChild);
-    while (list.children.length > 15) list.removeChild(list.lastChild);
-}
-
 // ========== 声音提示 ==========
 function playSound(type) {
     try {
@@ -1016,162 +1052,7 @@ function playSound(type) {
     } catch (e) {}
 }
 
-// ========== 摄像头扫码（内嵌模式）==========
-let cameraStream = null;
-let scanning = false;
-
-function toggleCamera() {
-    const container = document.getElementById('cameraContainer');
-    if (container.style.display === 'none') {
-        startCamera();
-    } else {
-        stopCamera();
-    }
-}
-
-async function startCamera() {
-    const video = document.getElementById('cameraVideo');
-    const container = document.getElementById('cameraContainer');
-    
-    try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' } 
-        });
-        video.srcObject = cameraStream;
-        container.style.display = 'block';
-        scanning = true;
-        scanQRCode();
-    } catch (err) {
-        alert('无法访问摄像头：' + err.message + '\n请确保已授予摄像头权限，或使用手动输入方式签到。');
-    }
-}
-
-function stopCamera() {
-    const video = document.getElementById('cameraVideo');
-    const container = document.getElementById('cameraContainer');
-    
-    scanning = false;
-    if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-    }
-    video.srcObject = null;
-    container.style.display = 'none';
-}
-
-// 已签到ID缓存，防止重复扫描同一二维码
-let recentScannedIds = new Set();
-let isProcessingCheckin = false;
-
-function scanQRCode() {
-    if (!scanning) return;
-    
-    const video = document.getElementById('cameraVideo');
-    const canvas = document.getElementById('cameraCanvas');
-    const ctx = canvas.getContext('2d');
-    
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // 使用 jsQR 解码二维码
-        try {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'dontInvert',
-            });
-            
-            if (code && code.data) {
-                // 解析二维码中的URL，提取delegate_id
-                const url = code.data;
-                
-                // 从URL中提取delegate_id，格式如: https://.../checkin/123
-                const match = url.match(/checkin\/(\d+)/);
-                if (match) {
-                    const delegateId = parseInt(match[1]);
-                    
-                    // 如果正在处理签到或最近3秒内已扫描过该ID，则跳过
-                    if (isProcessingCheckin || recentScannedIds.has(delegateId)) {
-                        if (scanning) requestAnimationFrame(() => setTimeout(scanQRCode, 100));
-                        return;
-                    }
-                    
-                    recentScannedIds.add(delegateId);
-                    isProcessingCheckin = true;
-                    
-                    // 3秒后清除缓存，允许再次扫描
-                    setTimeout(() => {
-                        recentScannedIds.delete(delegateId);
-                    }, 3000);
-                    
-                    showCheckinResult('识别成功，正在签到...', 'info');
-                    
-                    fetch('/api/checkin-by-id', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({delegate_id: delegateId})
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        isProcessingCheckin = false;
-                        if (data.success) {
-                            const type = data.already ? 'info' : 'success';
-                            showCheckinResult(data.message + (data.delegate ? ` - ${data.delegate.name}` : ''), type);
-                            // 添加到最近签到列表
-                            addRecentCheckin(data.delegate, data.already);
-                        } else {
-                            showCheckinResult(data.message, 'error');
-                        }
-                    })
-                    .catch(err => {
-                        isProcessingCheckin = false;
-                        showCheckinResult('签到失败：' + err, 'error');
-                    });
-                    
-                    // 继续扫描，不停止
-                    if (scanning) requestAnimationFrame(() => setTimeout(scanQRCode, 200));
-                    return;
-                }
-            }
-        } catch (e) {
-            console.error('QR扫描错误:', e);
-        }
-    }
-    
-    // 每100ms扫描一次，响应更快
-    if (scanning) {
-        requestAnimationFrame(() => setTimeout(scanQRCode, 100));
-    }
-}
-
-// 添加最近签到记录到列表
-function addRecentCheckin(delegate, already) {
-    const container = document.getElementById('recentCheckins');
-    const list = document.getElementById('checkinList');
-    container.style.display = 'block';
-    
-    const badge = document.createElement('span');
-    badge.style.cssText = 'padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500;';
-    if (already) {
-        badge.style.background = '#fff3cd';
-        badge.style.color = '#856404';
-        badge.textContent = delegate.name + ' (已签到)';
-    } else {
-        badge.style.background = '#d4edda';
-        badge.style.color = '#155724';
-        badge.textContent = delegate.name + ' ✓';
-    }
-    
-    list.insertBefore(badge, list.firstChild);
-    
-    // 只保留最近10条
-    while (list.children.length > 10) {
-        list.removeChild(list.lastChild);
-    }
-}
-
-// ========== 搜索签到 ==========
+// ========== 高级搜索签到 ==========
 function searchAndCheckin() {
     const keyword = document.getElementById('searchInput').value.trim();
     const resultsDiv = document.getElementById('searchResults');

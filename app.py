@@ -150,12 +150,18 @@ def init_db():
                 )
             ''')
 
-            # 插入默认管理员
-            try:
-                c.execute("INSERT INTO admins (username, password) VALUES (%s, %s)",
-                          ('admin', 'admin123'))
-            except psycopg2.errors.UniqueViolation:
-                pass  # 管理员已存在
+            # 插入默认管理员（支持3个管理员同时核销）
+            default_admins = [
+                ('admin', 'admin123'),
+                ('admin2', 'admin123'),
+                ('admin3', 'admin123')
+            ]
+            for username, password in default_admins:
+                try:
+                    c.execute("INSERT INTO admins (username, password) VALUES (%s, %s)",
+                              (username, password))
+                except psycopg2.errors.UniqueViolation:
+                    pass  # 管理员已存在
 
             conn.commit()
             conn.close()
@@ -192,9 +198,15 @@ def init_db():
                 )
             ''')
 
-            # 插入默认管理员
-            c.execute("INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)",
-                      ('admin', 'admin123'))
+            # 插入默认管理员（支持3个管理员同时核销）
+            default_admins = [
+                ('admin', 'admin123'),
+                ('admin2', 'admin123'),
+                ('admin3', 'admin123')
+            ]
+            for username, password in default_admins:
+                c.execute("INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)",
+                          (username, password))
 
             conn.commit()
             conn.close()
