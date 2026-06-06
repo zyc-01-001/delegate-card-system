@@ -317,9 +317,17 @@
         <div style="margin-bottom: 15px;">
             <button class="btn btn-info" onclick="toggleCamera()" style="margin-bottom: 10px;">📷 打开摄像头扫码</button>
             <div id="cameraContainer" style="display: none; text-align: center;">
-                <video id="cameraVideo" style="width: 100%; max-width: 400px; border-radius: 8px;" autoplay></video>
+                <div id="cameraGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; margin-bottom: 10px;">
+                    <div class="camera-box">
+                        <video id="cameraVideo" style="width: 100%; max-width: 640px; border-radius: 8px; border: 2px solid #C41E3A;" autoplay></video>
+                        <p style="color: #666; font-size: 14px; margin-top: 5px;">主摄像头 - 将二维码对准摄像头</p>
+                    </div>
+                </div>
                 <canvas id="cameraCanvas" style="display: none;"></canvas>
-                <p style="color: #666; font-size: 14px; margin-top: 5px;">将二维码对准摄像头</p>
+                <div id="recentCheckins" style="margin: 15px 0; padding: 10px; background: #f0f9f0; border-radius: 8px; display: none;">
+                    <h4 style="color: #28a745; margin-bottom: 10px;">最近签到</h4>
+                    <div id="checkinList" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
+                </div>
                 <button class="btn btn-danger" onclick="stopCamera()" style="margin-top: 10px;">关闭摄像头</button>
             </div>
         </div>
@@ -838,6 +846,10 @@ function stopCamera() {
     container.style.display = 'none';
 }
 
+// 已签到ID缓存，防止重复扫描同一二维码
+let recentScannedIds = new Set();
+let isProcessingCheckin = false;
+
 function scanQRCode() {
     if (!scanning) return;
     
@@ -860,14 +872,26 @@ function scanQRCode() {
             if (code && code.data) {
                 // 解析二维码中的URL，提取delegate_id
                 const url = code.data;
-                console.log('扫描到二维码:', url);
                 
                 // 从URL中提取delegate_id，格式如: https://.../checkin/123
                 const match = url.match(/checkin\/(\d+)/);
                 if (match) {
                     const delegateId = parseInt(match[1]);
-                    // 停止扫描，执行签到
-                    scanning = false;
+                    
+                    // 如果正在处理签到或最近3秒内已扫描过该ID，则跳过
+                    if (isProcessingCheckin || recentScannedIds.has(delegateId)) {
+                        if (scanning) requestAnimationFrame(() => setTimeout(scanQRCode, 100));
+                        return;
+                    }
+                    
+                    recentScannedIds.add(delegateId);
+                    isProcessingCheckin = true;
+                    
+                    // 3秒后清除缓存，允许再次扫描
+                    setTimeout(() => {
+                        recentScannedIds.delete(delegateId);
+                    }, 3000);
+                    
                     showCheckinResult('识别成功，正在签到...', 'info');
                     
                     fetch('/api/checkin-by-id', {
@@ -877,31 +901,24 @@ function scanQRCode() {
                     })
                     .then(r => r.json())
                     .then(data => {
+                        isProcessingCheckin = false;
                         if (data.success) {
                             const type = data.already ? 'info' : 'success';
                             showCheckinResult(data.message + (data.delegate ? ` - ${data.delegate.name}` : ''), type);
-                            if (!data.already) {
-                                setTimeout(() => location.reload(), 1500);
-                            } else {
-                                // 已签到则继续扫描
-                                scanning = true;
-                                setTimeout(scanQRCode, 1000);
-                            }
+                            // 添加到最近签到列表
+                            addRecentCheckin(data.delegate, data.already);
                         } else {
                             showCheckinResult(data.message, 'error');
-                            scanning = true;
-                            setTimeout(scanQRCode, 1000);
                         }
                     })
                     .catch(err => {
+                        isProcessingCheckin = false;
                         showCheckinResult('签到失败：' + err, 'error');
-                        scanning = true;
-                        setTimeout(scanQRCode, 1000);
                     });
                     
-                    return; // 退出本次扫描循环
-                } else {
-                    showCheckinResult('无法识别的二维码格式', 'error');
+                    // 继续扫描，不停止
+                    if (scanning) requestAnimationFrame(() => setTimeout(scanQRCode, 200));
+                    return;
                 }
             }
         } catch (e) {
@@ -909,9 +926,35 @@ function scanQRCode() {
         }
     }
     
-    // 每300ms扫描一次
+    // 每100ms扫描一次，响应更快
     if (scanning) {
-        requestAnimationFrame(() => setTimeout(scanQRCode, 300));
+        requestAnimationFrame(() => setTimeout(scanQRCode, 100));
+    }
+}
+
+// 添加最近签到记录到列表
+function addRecentCheckin(delegate, already) {
+    const container = document.getElementById('recentCheckins');
+    const list = document.getElementById('checkinList');
+    container.style.display = 'block';
+    
+    const badge = document.createElement('span');
+    badge.style.cssText = 'padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500;';
+    if (already) {
+        badge.style.background = '#fff3cd';
+        badge.style.color = '#856404';
+        badge.textContent = delegate.name + ' (已签到)';
+    } else {
+        badge.style.background = '#d4edda';
+        badge.style.color = '#155724';
+        badge.textContent = delegate.name + ' ✓';
+    }
+    
+    list.insertBefore(badge, list.firstChild);
+    
+    // 只保留最近10条
+    while (list.children.length > 10) {
+        list.removeChild(list.lastChild);
     }
 }
 

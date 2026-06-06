@@ -86,7 +86,7 @@
             </div>
         </div>
         <div class="card-footer">
-            签发日期: {{ delegate.created_at[:10] if delegate.created_at else '-' }}
+            签发日期: {{ delegate.created_at.strftime('%Y-%m-%d') if delegate.created_at else '-' }}
         </div>
     </div>
     
