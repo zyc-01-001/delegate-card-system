@@ -96,8 +96,11 @@ _db_initialized = False
 def get_db():
     global _db_initialized
     if not _db_initialized:
-        init_db()
-        _db_initialized = True
+        try:
+            init_db()
+            _db_initialized = True
+        except Exception:
+            pass  # 初始化失败，下次请求再试
     return DB()
 
 
