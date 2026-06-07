@@ -3,7 +3,8 @@
 {% block title %}管理后台{% endblock %}
 
 {% block extra_css %}
-
+<!-- jsQR 二维码扫描库 -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
     .stats-grid {
         display: grid;
@@ -315,9 +316,39 @@
             💡 <strong>核销流程：</strong>学生出示代表证 → 管理员核对照片和身份信息 → 点击"核销签到"按钮完成签到
         </p>
         
-        <!-- 快速搜索核销 - 最常用 -->
+        <!-- 扫码核销 - 最快方式 -->
+        <div style="background: #d4edda; padding: 15px; border-radius: 10px; border: 2px solid #28a745; margin-bottom: 15px;">
+            <p style="color: #155724; font-weight: bold; margin-bottom: 10px;">📷 方式一：扫码核销（最快）</p>
+            <div style="text-align: center; margin-bottom: 10px;">
+                <button class="btn btn-success" onclick="toggleScanMode()" id="scanToggleBtn" style="padding: 12px 30px; font-size: 16px; font-weight: bold; background: #28a745; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 12px rgba(40,167,69,0.3);">
+                    📷 打开摄像头扫码
+                </button>
+                <p style="color: #155724; font-size: 12px; margin-top: 8px;">学生出示二维码 → 自动扫描 → 即时核销成功</p>
+            </div>
+            <div id="scanContainer" style="display: none; text-align: center;">
+                <div style="position: relative; display: inline-block; max-width: 500px; width: 100%;">
+                    <video id="scanVideo" style="width: 100%; border-radius: 12px; border: 3px solid #28a745;" autoplay playsinline muted></video>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; border: 3px solid rgba(255,255,255,0.8); border-radius: 16px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.4); pointer-events: none;">
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.7); font-size: 13px; text-align: center; white-space: nowrap;">对准二维码</div>
+                        <div style="position: absolute; top: -2px; left: 50%; transform: translateX(-50%); width: 30px; height: 4px; background: #28a745; border-radius: 2px;"></div>
+                        <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); width: 30px; height: 4px; background: #28a745; border-radius: 2px;"></div>
+                        <div style="position: absolute; top: 50%; left: -2px; transform: translateY(-50%); width: 4px; height: 30px; background: #28a745; border-radius: 2px;"></div>
+                        <div style="position: absolute; top: 50%; right: -2px; transform: translateY(-50%); width: 4px; height: 30px; background: #28a745; border-radius: 2px;"></div>
+                    </div>
+                </div>
+                <canvas id="scanCanvas" style="display: none;"></canvas>
+                <div id="scanStatus" style="margin-top: 10px; padding: 10px; border-radius: 8px; font-weight: bold; display: none;"></div>
+                <div id="recentScans" style="margin-top: 10px; padding: 10px; background: #f0f9f0; border-radius: 8px; display: none;">
+                    <p style="color: #28a745; font-weight: bold; margin-bottom: 8px;">✅ 最近核销 (<span id="scanCount">0</span>人)</p>
+                    <div id="scanList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                </div>
+                <button class="btn btn-danger" onclick="toggleScanMode()" style="margin-top: 10px;">关闭摄像头</button>
+            </div>
+        </div>
+
+        <!-- 快速搜索核销 -->
         <div style="background: #fff3cd; padding: 15px; border-radius: 10px; border: 2px solid #ffc107; margin-bottom: 15px;">
-            <p style="color: #856404; font-weight: bold; margin-bottom: 10px;">🔍 方式一：快速搜索核销（推荐）</p>
+            <p style="color: #856404; font-weight: bold; margin-bottom: 10px;">🔍 方式二：快速搜索核销</p>
             <div class="checkin-input">
                 <input type="text" id="fastSearchInput" placeholder="输入学号或姓名，回车直接核销..." autofocus style="border-color: #ffc107;">
                 <button class="btn btn-warning" onclick="fastSearchAndVerify()" style="background: #ffc107; color: #333; border: none; font-weight: bold;">🔍 查找</button>
@@ -328,7 +359,7 @@
         
         <!-- 代表证编号核销 -->
         <div style="background: #d1ecf1; padding: 15px; border-radius: 10px; border: 2px solid #17a2b8; margin-bottom: 15px;">
-            <p style="color: #0c5460; font-weight: bold; margin-bottom: 10px;">🎫 方式二：代表证编号核销</p>
+            <p style="color: #0c5460; font-weight: bold; margin-bottom: 10px;">🎫 方式三：代表证编号核销</p>
             <div class="checkin-input">
                 <input type="text" id="cardNumberInput" placeholder="输入代表证编号（如：20250001）" style="border-color: #17a2b8;">
                 <button class="btn btn-info" onclick="checkinByCard()" style="font-weight: bold;">核销签到</button>
@@ -490,7 +521,164 @@ function showCheckinResult(message, type) {
     result.textContent = message;
 }
 
-// 方式一：快速搜索核销（推荐）
+// ========== 扫码核销功能 ==========
+let scanStream = null;
+let isScanning = false;
+let scanCount = 0;
+let recentScanIds = new Set();
+let isProcessingScan = false;
+
+function toggleScanMode() {
+    const container = document.getElementById('scanContainer');
+    const btn = document.getElementById('scanToggleBtn');
+    
+    if (container.style.display === 'none' || container.style.display === '') {
+        startScanMode();
+    } else {
+        stopScanMode();
+    }
+}
+
+async function startScanMode() {
+    const container = document.getElementById('scanContainer');
+    const btn = document.getElementById('scanToggleBtn');
+    const video = document.getElementById('scanVideo');
+    
+    try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        video.srcObject = scanStream;
+        container.style.display = 'block';
+        btn.textContent = '📷 扫码中...';
+        btn.style.background = '#dc3545';
+        isScanning = true;
+        scanCount = 0;
+        scanQRCodeLoop();
+    } catch (err) {
+        alert('无法访问摄像头：' + err.message + '\n请确保已授予摄像头权限。');
+    }
+}
+
+function stopScanMode() {
+    const container = document.getElementById('scanContainer');
+    const btn = document.getElementById('scanToggleBtn');
+    const video = document.getElementById('scanVideo');
+    
+    isScanning = false;
+    if (scanStream) {
+        scanStream.getTracks().forEach(track => track.stop());
+        scanStream = null;
+    }
+    video.srcObject = null;
+    container.style.display = 'none';
+    btn.textContent = '📷 打开摄像头扫码';
+    btn.style.background = '#28a745';
+    document.getElementById('scanStatus').style.display = 'none';
+}
+
+function scanQRCodeLoop() {
+    if (!isScanning) return;
+    
+    const video = document.getElementById('scanVideo');
+    const canvas = document.getElementById('scanCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        try {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'dontInvert',
+            });
+            
+            if (code && code.data) {
+                const match = code.data.match(/checkin\/(\d+)/);
+                if (match) {
+                    const delegateId = parseInt(match[1]);
+                    
+                    if (isProcessingScan || recentScanIds.has(delegateId)) {
+                        if (isScanning) requestAnimationFrame(() => setTimeout(scanQRCodeLoop, 80));
+                        return;
+                    }
+                    
+                    recentScanIds.add(delegateId);
+                    isProcessingScan = true;
+                    setTimeout(() => recentScanIds.delete(delegateId), 3000);
+                    
+                    showScanStatus('识别成功，核销中...', 'info');
+                    
+                    fetch('/api/checkin-by-id', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({delegate_id: delegateId})
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        isProcessingScan = false;
+                        if (data.success) {
+                            scanCount++;
+                            const name = data.delegate ? data.delegate.name : '';
+                            
+                            if (data.already) {
+                                showScanStatus(name + ' - 已核销过', 'warning');
+                                playSound('warning');
+                            } else {
+                                showScanStatus('✅ ' + name + ' 核销成功!', 'success');
+                                playSound('success');
+                                addRecentScan(name);
+                            }
+                            
+                            document.getElementById('scanCount').textContent = scanCount;
+                            document.getElementById('recentScans').style.display = 'block';
+                        } else {
+                            showScanStatus('❌ ' + data.message, 'error');
+                            playSound('error');
+                        }
+                    })
+                    .catch(err => {
+                        isProcessingScan = false;
+                        showScanStatus('核销失败', 'error');
+                    });
+                    
+                    if (isScanning) requestAnimationFrame(() => setTimeout(scanQRCodeLoop, 150));
+                    return;
+                }
+            }
+        } catch (e) {}
+    }
+    
+    if (isScanning) requestAnimationFrame(() => setTimeout(scanQRCodeLoop, 80));
+}
+
+function showScanStatus(text, type) {
+    const el = document.getElementById('scanStatus');
+    el.style.display = 'block';
+    const colors = {
+        success: { bg: '#d4edda', color: '#155724' },
+        warning: { bg: '#fff3cd', color: '#856404' },
+        error: { bg: '#f8d7da', color: '#721c24' },
+        info: { bg: '#d1ecf1', color: '#0c5460' }
+    };
+    const style = colors[type] || colors.info;
+    el.style.background = style.bg;
+    el.style.color = style.color;
+    el.textContent = text;
+}
+
+function addRecentScan(name) {
+    const list = document.getElementById('scanList');
+    const badge = document.createElement('span');
+    badge.style.cssText = 'background: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-size: 13px; font-weight: 500;';
+    badge.textContent = name + ' ✓';
+    list.insertBefore(badge, list.firstChild);
+    while (list.children.length > 15) list.removeChild(list.lastChild);
+}
+
+// 方式二：快速搜索核销
 function fastSearchAndVerify() {
     const keyword = document.getElementById('fastSearchInput').value.trim();
     const resultsDiv = document.getElementById('fastSearchResults');
