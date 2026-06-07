@@ -10,7 +10,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'delegate_card_secret_key_2025')
-app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'static/uploads')
+
+# 上传文件夹使用绝对路径，确保在不同环境下都能正确找到文件
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, 'static', 'uploads'))
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB
 
 # 数据库配置 - 支持 PostgreSQL 和 SQLite
@@ -18,7 +21,6 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 USE_POSTGRESQL = bool(DATABASE_URL)
 
 # SQLite 配置（本地开发）
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get('DB_PATH', os.path.join(BASE_DIR, 'instance', 'delegates.db'))
 
 # 确保上传目录存在
@@ -254,8 +256,10 @@ def apply():
         photo_path = ''
         if photo and photo.filename:
             filename = secure_filename(f"{student_id}_{photo.filename}")
-            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            photo.save(photo_path)
+            abs_photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            photo.save(abs_photo_path)
+            # 存储相对路径用于URL访问，格式: static/uploads/filename
+            photo_path = os.path.join('static', 'uploads', filename)
 
         db = get_db()
         try:
@@ -354,12 +358,24 @@ def generate_card_image(delegate):
 
     # 加载本地中文字体
     font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansCJKsc-Regular.otf')
+    font_title = None
+    font_subtitle = None
+    font_text = None
+    font_small = None
+    
     try:
-        font_title = ImageFont.truetype(font_path, 36)
-        font_subtitle = ImageFont.truetype(font_path, 24)
-        font_text = ImageFont.truetype(font_path, 20)
-        font_small = ImageFont.truetype(font_path, 16)
-    except:
+        if os.path.exists(font_path):
+            font_title = ImageFont.truetype(font_path, 36)
+            font_subtitle = ImageFont.truetype(font_path, 24)
+            font_text = ImageFont.truetype(font_path, 20)
+            font_small = ImageFont.truetype(font_path, 16)
+        else:
+            print(f"字体文件不存在: {font_path}")
+    except Exception as e:
+        print(f"字体加载失败: {e}, 路径: {font_path}")
+    
+    # 如果字体加载失败，使用默认字体
+    if font_title is None:
         font_title = ImageFont.load_default()
         font_subtitle = font_title
         font_text = font_title
@@ -372,12 +388,24 @@ def generate_card_image(delegate):
 
     # 照片区域
     photo_y = 150
-    if delegate['photo_path'] and os.path.exists(delegate['photo_path']):
+    photo_abs_path = None
+    if delegate['photo_path']:
+        # 尝试直接作为相对路径查找
+        if os.path.exists(delegate['photo_path']):
+            photo_abs_path = delegate['photo_path']
+        else:
+            # 尝试基于项目根目录查找
+            alt_path = os.path.join(BASE_DIR, delegate['photo_path'])
+            if os.path.exists(alt_path):
+                photo_abs_path = alt_path
+    
+    if photo_abs_path:
         try:
-            photo = Image.open(delegate['photo_path'])
+            photo = Image.open(photo_abs_path)
             photo = photo.resize((150, 200))
             img.paste(photo, (width//2 - 75, photo_y))
-        except:
+        except Exception as e:
+            print(f"照片加载失败: {e}, 路径: {photo_abs_path}")
             draw.rectangle([width//2 - 75, photo_y, width//2 + 75, photo_y + 200],
                           outline='#C41E3A', width=2)
             draw.text((width//2, photo_y + 100), "照片", font=font_text,
@@ -537,8 +565,15 @@ def delete_delegate(delegate_id):
     db = get_db()
     c = db.execute("SELECT photo_path FROM delegates WHERE id = ?", (delegate_id,))
     result = c.fetchone()
-    if result and result['photo_path'] and os.path.exists(result['photo_path']):
-        os.remove(result['photo_path'])
+    if result and result['photo_path']:
+        # 尝试删除照片文件（支持相对路径和绝对路径）
+        photo_path = result['photo_path']
+        if os.path.exists(photo_path):
+            os.remove(photo_path)
+        else:
+            alt_path = os.path.join(BASE_DIR, photo_path)
+            if os.path.exists(alt_path):
+                os.remove(alt_path)
 
     db.execute("DELETE FROM delegates WHERE id = ?", (delegate_id,))
     db.commit()
