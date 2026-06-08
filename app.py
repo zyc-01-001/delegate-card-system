@@ -152,11 +152,16 @@ def init_db():
                 )
             ''')
 
-            # 插入默认管理员（支持3个管理员同时核销）
+            # 插入默认管理员（支持5个管理员同时核销，每人负责约20人）
             default_admins = [
                 ('admin', 'admin123'),
                 ('admin2', 'admin123'),
-                ('admin3', 'admin123')
+                ('admin3', 'admin123'),
+                ('admin01', 'admin01'),
+                ('admin02', 'admin02'),
+                ('admin03', 'admin03'),
+                ('admin04', 'admin04'),
+                ('admin05', 'admin05')
             ]
             for username, password in default_admins:
                 try:
@@ -200,11 +205,16 @@ def init_db():
                 )
             ''')
 
-            # 插入默认管理员（支持3个管理员同时核销）
+            # 插入默认管理员（支持5个管理员同时核销，每人负责约20人）
             default_admins = [
                 ('admin', 'admin123'),
                 ('admin2', 'admin123'),
-                ('admin3', 'admin123')
+                ('admin3', 'admin123'),
+                ('admin01', 'admin01'),
+                ('admin02', 'admin02'),
+                ('admin03', 'admin03'),
+                ('admin04', 'admin04'),
+                ('admin05', 'admin05')
             ]
             for username, password in default_admins:
                 c.execute("INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)",
