@@ -227,6 +227,53 @@ def init_db():
         import traceback
         traceback.print_exc()
 
+# 初始化/重置管理员账号（用于部署后创建新管理员）
+@app.route('/init-admins')
+def init_admins():
+    """初始化所有管理员账号，访问此路由可创建/重置管理员账号"""
+    db = get_db()
+    
+    default_admins = [
+        ('admin', 'admin123'),
+        ('admin2', 'admin123'),
+        ('admin3', 'admin123'),
+        ('admin01', 'admin01'),
+        ('admin02', 'admin02'),
+        ('admin03', 'admin03'),
+        ('admin04', 'admin04'),
+        ('admin05', 'admin05')
+    ]
+    
+    created = []
+    skipped = []
+    
+    for username, password in default_admins:
+        try:
+            c = db.execute("SELECT * FROM admins WHERE username = ?", (username,))
+            existing = c.fetchone()
+            if existing:
+                # 更新密码
+                db.execute("UPDATE admins SET password = ? WHERE username = ?",
+                          (password, username))
+                skipped.append(username)
+            else:
+                db.execute("INSERT INTO admins (username, password) VALUES (?, ?)",
+                          (username, password))
+                created.append(username)
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'创建 {username} 失败: {str(e)}'}), 500
+    
+    db.commit()
+    db.close()
+    
+    return jsonify({
+        'success': True,
+        'message': f'管理员账号初始化完成：新建 {len(created)} 个，更新 {len(skipped)} 个',
+        'created': created,
+        'updated': skipped,
+        'all_admins': [a[0] for a in default_admins]
+    })
+
 # 生成代表证编号
 def generate_card_number():
     db = get_db()
