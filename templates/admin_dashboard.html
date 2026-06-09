@@ -416,6 +416,7 @@
         <button class="btn btn-success" onclick="batchApprove()" style="padding: 8px 16px; font-size: 14px; background: #28a745; font-weight: bold;">✓ 一键审核通过</button>
         <button class="btn btn-success" onclick="batchCheckin()" style="padding: 8px 16px; font-size: 14px;">批量签到</button>
         <button class="btn btn-info" onclick="showReport()" style="padding: 8px 16px; font-size: 14px;">📊 签到统计</button>
+        <button class="btn btn-primary" onclick="showDateCheckin()" style="padding: 8px 16px; font-size: 14px;">📅 按日期查看</button>
         <button class="btn btn-primary" onclick="exportData()" style="padding: 8px 16px; font-size: 14px;">导出数据</button>
     </div>
     
@@ -509,6 +510,22 @@
         <span class="modal-close" onclick="closeReportModal()">&times;</span>
         <h3 style="text-align: center; margin-bottom: 20px; color: #C41E3A;">📊 签到统计报表</h3>
         <div id="reportContent"></div>
+    </div>
+</div>
+
+<!-- 按日期查看签到记录弹窗 -->
+<div class="modal-overlay" id="dateCheckinModal">
+    <div class="modal-content" style="max-width: 800px;">
+        <span class="modal-close" onclick="closeDateCheckinModal()">&times;</span>
+        <h3 style="text-align: center; margin-bottom: 20px; color: #C41E3A;">📅 按日期查看签到记录</h3>
+        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <label>选择日期：</label>
+            <input type="date" id="checkinDateInput" style="padding: 8px; border: 2px solid #e0e0e0; border-radius: 8px;">
+            <button class="btn btn-primary" onclick="loadCheckinByDate()">查询</button>
+            <button class="btn btn-warning" onclick="resetCheckinStatus()" style="margin-left: auto;">🔄 重置今日签到</button>
+        </div>
+        <div id="dateCheckinStats" style="margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 10px;"></div>
+        <div id="dateCheckinContent" style="max-height: 400px; overflow-y: auto;"></div>
     </div>
 </div>
 
@@ -1264,6 +1281,128 @@ function exportData() {
     link.href = URL.createObjectURL(blob);
     link.download = '代表名单_' + new Date().toLocaleDateString() + '.csv';
     link.click();
+}
+
+// ========== 按日期查看签到记录 ==========
+
+function showDateCheckin() {
+    const modal = document.getElementById('dateCheckinModal');
+    // 默认设置为今天
+    document.getElementById('checkinDateInput').value = new Date().toISOString().split('T')[0];
+    loadCheckinByDate();
+    modal.classList.add('active');
+}
+
+function closeDateCheckinModal() {
+    document.getElementById('dateCheckinModal').classList.remove('active');
+}
+
+function loadCheckinByDate() {
+    const date = document.getElementById('checkinDateInput').value;
+    if (!date) {
+        alert('请选择日期');
+        return;
+    }
+    
+    const statsDiv = document.getElementById('dateCheckinStats');
+    const contentDiv = document.getElementById('dateCheckinContent');
+    
+    statsDiv.innerHTML = '<p style="color: #666;">加载中...</p>';
+    contentDiv.innerHTML = '';
+    
+    fetch('/api/checkin-by-date?date=' + encodeURIComponent(date))
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            statsDiv.innerHTML = '<p style="color: #C41E3A;">' + data.message + '</p>';
+            return;
+        }
+        
+        const stats = data.stats;
+        const records = data.records;
+        
+        // 显示统计
+        statsDiv.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+                <div style="background: white; padding: 15px; border-radius: 10px;">
+                    <div style="font-size: 28px; font-weight: bold; color: #4facfe;">${stats.total_approved}</div>
+                    <div style="color: #666; font-size: 14px;">总通过人数</div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px;">
+                    <div style="font-size: 28px; font-weight: bold; color: #28a745;">${stats.checkin_count}</div>
+                    <div style="color: #666; font-size: 14px;">已签到</div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px;">
+                    <div style="font-size: 28px; font-weight: bold; color: #C41E3A;">${stats.not_checkin}</div>
+                    <div style="color: #666; font-size: 14px;">未签到</div>
+                </div>
+            </div>
+            <div style="margin-top: 10px; text-align: center; color: #666;">
+                签到率: <strong style="color: #28a745;">${stats.total_approved > 0 ? Math.round(stats.checkin_count/stats.total_approved*100) : 0}%</strong>
+            </div>
+        `;
+        
+        // 显示签到列表
+        if (records.length === 0) {
+            contentDiv.innerHTML = '<p style="color: #666; text-align: center;">该日期暂无签到记录</p>';
+        } else {
+            let html = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; text-align: left;">姓名</th>
+                            <th style="padding: 10px; text-align: left;">学号</th>
+                            <th style="padding: 10px; text-align: left;">代表团</th>
+                            <th style="padding: 10px; text-align: left;">签到时间</th>
+                            <th style="padding: 10px; text-align: left;">操作员</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            records.forEach(r => {
+                html += `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">${r.name}</td>
+                        <td style="padding: 10px;">${r.student_id}</td>
+                        <td style="padding: 10px;">${r.delegation}</td>
+                        <td style="padding: 10px;">${r.check_time}</td>
+                        <td style="padding: 10px;">${r.admin_user || 'admin'}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            contentDiv.innerHTML = html;
+        }
+    })
+    .catch(err => {
+        statsDiv.innerHTML = '<p style="color: #C41E3A;">加载失败: ' + err + '</p>';
+    });
+}
+
+// 重置签到状态（用于次日签到）
+function resetCheckinStatus() {
+    if (!confirm('确定要重置所有代表的签到状态吗？\n这将清除当前的签到标记，允许进行新的签到日。\n历史签到记录仍会保留在系统中。')) {
+        return;
+    }
+    
+    fetch('/api/reset-checkin', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('重置失败: ' + data.message);
+        }
+    })
+    .catch(err => {
+        alert('重置失败: ' + err);
+    });
 }
 
 // ========== 声音提示 ==========

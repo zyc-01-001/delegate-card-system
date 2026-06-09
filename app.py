@@ -152,6 +152,18 @@ def init_db():
                 )
             ''')
 
+            # 签到记录表（支持多日签到）
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS checkin_records (
+                    id SERIAL PRIMARY KEY,
+                    delegate_id INTEGER NOT NULL,
+                    check_date DATE NOT NULL,
+                    check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    admin_user TEXT,
+                    UNIQUE(delegate_id, check_date)
+                )
+            ''')
+
             # 插入默认管理员（5个管理员同时核销，每人负责约20人）
             default_admins = [
                 ('admin01', 'admin123'),
@@ -199,6 +211,18 @@ def init_db():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL UNIQUE,
                     password TEXT NOT NULL
+                )
+            ''')
+
+            # 签到记录表（支持多日签到）
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS checkin_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    delegate_id INTEGER NOT NULL,
+                    check_date DATE NOT NULL,
+                    check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    admin_user TEXT,
+                    UNIQUE(delegate_id, check_date)
                 )
             ''')
 
@@ -675,7 +699,7 @@ def batch_approve():
 
 @app.route('/api/batch-checkin', methods=['POST'])
 def batch_checkin():
-    """批量签到API - 用于管理员批量操作"""
+    """批量签到API - 用于管理员批量操作，支持多日签到记录"""
     if not session.get('admin'):
         return jsonify({'success': False, 'message': '未授权'}), 403
 
@@ -690,15 +714,27 @@ def batch_checkin():
     success_count = 0
     failed_count = 0
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    today = datetime.now().strftime("%Y-%m-%d")
+    admin_user = session.get('admin_user', 'admin')
 
     for delegate_id in delegate_ids:
         c = db.execute("SELECT * FROM delegates WHERE id = ?", (delegate_id,))
         delegate = c.fetchone()
 
-        if delegate and delegate['status'] == 'approved' and not delegate['checked_in']:
-            db.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
-                      (now, delegate_id))
-            success_count += 1
+        if delegate and delegate['status'] == 'approved':
+            # 检查今日是否已签到
+            c = db.execute("SELECT * FROM checkin_records WHERE delegate_id = ? AND check_date = ?",
+                           (delegate_id, today))
+            if not c.fetchone():
+                # 更新 delegates 表
+                db.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
+                          (now, delegate_id))
+                # 插入签到记录表
+                db.execute("INSERT INTO checkin_records (delegate_id, check_date, check_time, admin_user) VALUES (?, ?, ?, ?)",
+                          (delegate_id, today, now, admin_user))
+                success_count += 1
+            else:
+                failed_count += 1
         else:
             failed_count += 1
 
@@ -714,7 +750,7 @@ def batch_checkin():
 
 @app.route('/api/checkin-by-card', methods=['POST'])
 def checkin_by_card():
-    """通过卡号签到API"""
+    """通过卡号签到API - 支持多日签到记录"""
     if not session.get('admin'):
         return jsonify({'success': False, 'message': '未授权'}), 403
 
@@ -736,22 +772,37 @@ def checkin_by_card():
         db.close()
         return jsonify({'success': False, 'message': '代表证未通过审核'}), 400
 
-    if delegate['checked_in']:
+    # 检查今日是否已签到
+    today = datetime.now().strftime("%Y-%m-%d")
+    c = db.execute("SELECT * FROM checkin_records WHERE delegate_id = ? AND check_date = ?",
+                   (delegate['id'], today))
+    today_record = c.fetchone()
+
+    if today_record:
         db.close()
         return jsonify({
             'success': True,
-            'message': '该代表已签到',
+            'message': '该代表今日已签到',
             'delegate': {
                 'name': delegate['name'],
                 'student_id': delegate['student_id'],
-                'check_in_time': delegate['check_in_time']
+                'check_in_time': today_record['check_time']
             },
             'already': True
         })
 
+    # 记录签到
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    admin_user = session.get('admin_user', 'admin')
+
+    # 更新 delegates 表（保持兼容性）
     db.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
               (now, delegate['id']))
+
+    # 插入签到记录表（支持多日签到）
+    db.execute("INSERT INTO checkin_records (delegate_id, check_date, check_time, admin_user) VALUES (?, ?, ?, ?)",
+              (delegate['id'], today, now, admin_user))
+
     db.commit()
     db.close()
 
@@ -815,7 +866,7 @@ def search_delegate():
 
 @app.route('/api/checkin-by-id', methods=['POST'])
 def checkin_by_id():
-    """通过ID签到API"""
+    """通过ID签到API - 支持多日签到记录"""
     if not session.get('admin'):
         return jsonify({'success': False, 'message': '未授权'}), 403
 
@@ -837,22 +888,37 @@ def checkin_by_id():
         db.close()
         return jsonify({'success': False, 'message': '代表证未通过审核'}), 400
 
-    if delegate['checked_in']:
+    # 检查今日是否已签到
+    today = datetime.now().strftime("%Y-%m-%d")
+    c = db.execute("SELECT * FROM checkin_records WHERE delegate_id = ? AND check_date = ?",
+                   (delegate_id, today))
+    today_record = c.fetchone()
+
+    if today_record:
         db.close()
         return jsonify({
             'success': True,
-            'message': f"{delegate['name']} 已签到",
+            'message': f"{delegate['name']} 今日已签到",
             'delegate': {
                 'name': delegate['name'],
                 'student_id': delegate['student_id'],
-                'check_in_time': delegate['check_in_time']
+                'check_in_time': today_record['check_time']
             },
             'already': True
         })
 
+    # 记录签到
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    admin_user = session.get('admin_user', 'admin')
+
+    # 更新 delegates 表（保持兼容性）
     db.execute("UPDATE delegates SET checked_in = 1, check_in_time = ? WHERE id = ?",
               (now, delegate_id))
+
+    # 插入签到记录表（支持多日签到）
+    db.execute("INSERT INTO checkin_records (delegate_id, check_date, check_time, admin_user) VALUES (?, ?, ?, ?)",
+              (delegate_id, today, now, admin_user))
+
     db.commit()
     db.close()
 
@@ -865,6 +931,106 @@ def checkin_by_id():
             'check_in_time': now
         },
         'already': False
+    })
+
+# ========== 按日期查看签到记录API ==========
+
+@app.route('/api/checkin-by-date', methods=['GET'])
+def checkin_by_date():
+    """按日期查看签到记录"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+
+    date = request.args.get('date', '').strip()
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
+
+    db = get_db()
+
+    # 获取该日期的签到记录
+    c = db.execute("""
+        SELECT cr.*, d.name, d.student_id, d.delegation, d.delegation_type, d.photo_path
+        FROM checkin_records cr
+        JOIN delegates d ON cr.delegate_id = d.id
+        WHERE cr.check_date = ?
+        ORDER BY cr.check_time DESC
+    """, (date,))
+    records = c.fetchall()
+
+    # 统计
+    c = db.execute("SELECT COUNT(*) AS count FROM checkin_records WHERE check_date = ?", (date,))
+    checkin_count = c.fetchone()['count']
+
+    c = db.execute("SELECT COUNT(*) AS count FROM delegates WHERE status = 'approved'")
+    total_approved = c.fetchone()['count']
+
+    db.close()
+
+    results = []
+    for row in records:
+        results.append({
+            'id': row['id'],
+            'delegate_id': row['delegate_id'],
+            'name': row['name'],
+            'student_id': row['student_id'],
+            'delegation': row['delegation'],
+            'delegation_type': row['delegation_type'],
+            'check_time': row['check_time'],
+            'admin_user': row['admin_user'],
+            'photo_path': row['photo_path']
+        })
+
+    return jsonify({
+        'success': True,
+        'date': date,
+        'records': results,
+        'stats': {
+            'checkin_count': checkin_count,
+            'total_approved': total_approved,
+            'not_checkin': total_approved - checkin_count
+        }
+    })
+
+# ========== 重置签到状态API（用于次日签到）==========
+
+@app.route('/api/reset-checkin', methods=['POST'])
+def reset_checkin():
+    """重置所有代表的签到状态，用于次日签到"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+
+    db = get_db()
+
+    # 重置 delegates 表的签到状态（保持兼容性）
+    db.execute("UPDATE delegates SET checked_in = 0, check_in_time = NULL")
+
+    db.commit()
+    db.close()
+
+    return jsonify({
+        'success': True,
+        'message': '签到状态已重置，可以开始新的签到日'
+    })
+
+# ========== 获取签到日期列表API ==========
+
+@app.route('/api/checkin-dates', methods=['GET'])
+def checkin_dates():
+    """获取所有有签到记录的日期列表"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+
+    db = get_db()
+    c = db.execute("""
+        SELECT DISTINCT check_date FROM checkin_records
+        ORDER BY check_date DESC
+    """)
+    dates = c.fetchall()
+    db.close()
+
+    return jsonify({
+        'success': True,
+        'dates': [row['check_date'] for row in dates]
     })
 
 if __name__ == '__main__':
