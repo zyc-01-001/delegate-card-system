@@ -443,7 +443,11 @@
                     <td>{{ d.id }}</td>
                     <td>
                         {% if d.photo_path %}
+                        {% if d.photo_path.startswith('data:') %}
+                        <img src="{{ d.photo_path }}" class="photo-thumb" alt="照片">
+                        {% else %}
                         <img src="/{{ d.photo_path }}" class="photo-thumb" alt="照片" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+                        {% endif %}
                         <span style="color: #999; display: none;">照片加载失败</span>
                         {% else %}
                         <span style="color: #999;">无</span>

@@ -323,15 +323,31 @@ def apply():
         delegation_type = request.form['delegation_type']
         class_name = request.form.get('class_name', '')
 
-        # 处理照片上传
+        # 处理照片上传 - 转为base64存储在数据库中（Render部署不保留文件系统）
         photo = request.files.get('photo')
         photo_path = ''
         if photo and photo.filename:
-            filename = secure_filename(f"{student_id}_{photo.filename}")
-            abs_photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            photo.save(abs_photo_path)
-            # 存储相对路径用于URL访问，格式: static/uploads/filename
-            photo_path = os.path.join('static', 'uploads', filename)
+            import base64
+            photo_data = photo.read()
+            # 压缩照片以减少数据库存储
+            from PIL import Image as PILImage
+            import io
+            try:
+                img = PILImage.open(io.BytesIO(photo_data))
+                # 限制最大尺寸为800x1000，保持证件照比例
+                img.thumbnail((800, 1000), PILImage.LANCZOS)
+                buffer = io.BytesIO()
+                # 转为JPEG，质量85
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                img.save(buffer, format='JPEG', quality=85)
+                photo_data = buffer.getvalue()
+            except:
+                pass  # 如果不是图片，保持原样
+            
+            photo_b64 = base64.b64encode(photo_data).decode('utf-8')
+            # 存储格式: data:image/jpeg;base64,xxxxx
+            photo_path = f"data:image/jpeg;base64,{photo_b64}"
 
         db = get_db()
         try:
@@ -496,29 +512,37 @@ def generate_card_image(delegate):
 
     # 照片区域
     photo_y = 150
-    photo_abs_path = None
+    photo_loaded = False
     if delegate['photo_path']:
-        # 尝试直接作为相对路径查找
-        if os.path.exists(delegate['photo_path']):
-            photo_abs_path = delegate['photo_path']
-        else:
-            # 尝试基于项目根目录查找
-            alt_path = os.path.join(BASE_DIR, delegate['photo_path'])
-            if os.path.exists(alt_path):
-                photo_abs_path = alt_path
-    
-    if photo_abs_path:
         try:
-            photo = Image.open(photo_abs_path)
-            photo = photo.resize((150, 200))
-            img.paste(photo, (width//2 - 75, photo_y))
+            if delegate['photo_path'].startswith('data:'):
+                # base64格式照片
+                import base64 as b64
+                header, b64data = delegate['photo_path'].split(',', 1)
+                photo_data = b64.b64decode(b64data)
+                photo = Image.open(io.BytesIO(photo_data))
+                photo = photo.resize((150, 200))
+                img.paste(photo, (width//2 - 75, photo_y))
+                photo_loaded = True
+            else:
+                # 文件路径格式
+                photo_abs_path = None
+                if os.path.exists(delegate['photo_path']):
+                    photo_abs_path = delegate['photo_path']
+                else:
+                    alt_path = os.path.join(BASE_DIR, delegate['photo_path'])
+                    if os.path.exists(alt_path):
+                        photo_abs_path = alt_path
+                
+                if photo_abs_path:
+                    photo = Image.open(photo_abs_path)
+                    photo = photo.resize((150, 200))
+                    img.paste(photo, (width//2 - 75, photo_y))
+                    photo_loaded = True
         except Exception as e:
-            print(f"照片加载失败: {e}, 路径: {photo_abs_path}")
-            draw.rectangle([width//2 - 75, photo_y, width//2 + 75, photo_y + 200],
-                          outline='#C41E3A', width=2)
-            draw.text((width//2, photo_y + 100), "照片", font=font_text,
-                     fill='#666666', anchor='mm')
-    else:
+            print(f"照片加载失败: {e}")
+    
+    if not photo_loaded:
         draw.rectangle([width//2 - 75, photo_y, width//2 + 75, photo_y + 200],
                       outline='#C41E3A', width=2)
         draw.text((width//2, photo_y + 100), "照片", font=font_text,
