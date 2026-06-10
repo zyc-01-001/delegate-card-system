@@ -1044,45 +1044,49 @@ def init_checkin_table():
     try:
         db = get_db()
 
-        # 检查表是否已存在
+        # 检查表是否已存在 - 使用独立连接避免事务污染
         try:
-            c = db.execute("SELECT 1 FROM checkin_records LIMIT 1")
-            db.commit()
+            check_db = get_db()
+            check_db.execute("SELECT 1 FROM checkin_records LIMIT 1")
+            check_db.close()
             db.close()
             return jsonify({'success': True, 'message': '签到记录表已存在'})
         except:
-            db.commit()  # 回滚失败的事务
+            pass  # 表不存在，继续创建
 
         # 创建签到记录表
-        if USE_POSTGRESQL:
-            db.execute('''
-                CREATE TABLE checkin_records (
-                    id SERIAL PRIMARY KEY,
-                    delegate_id INTEGER NOT NULL,
-                    check_date DATE NOT NULL,
-                    check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    admin_user TEXT,
-                    UNIQUE(delegate_id, check_date)
-                )
-            ''')
-        else:
-            db.execute('''
-                CREATE TABLE checkin_records (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    delegate_id INTEGER NOT NULL,
-                    check_date DATE NOT NULL,
-                    check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    admin_user TEXT,
-                    UNIQUE(delegate_id, check_date)
-                )
-            ''')
-
-        db.commit()
-        db.close()
-
-        return jsonify({'success': True, 'message': '签到记录表创建成功'})
+        try:
+            if USE_POSTGRESQL:
+                db.execute('''
+                    CREATE TABLE checkin_records (
+                        id SERIAL PRIMARY KEY,
+                        delegate_id INTEGER NOT NULL,
+                        check_date DATE NOT NULL,
+                        check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        admin_user TEXT,
+                        UNIQUE(delegate_id, check_date)
+                    )
+                ''')
+            else:
+                db.execute('''
+                    CREATE TABLE checkin_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        delegate_id INTEGER NOT NULL,
+                        check_date DATE NOT NULL,
+                        check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        admin_user TEXT,
+                        UNIQUE(delegate_id, check_date)
+                    )
+                ''')
+            db.commit()
+            db.close()
+            return jsonify({'success': True, 'message': '签到记录表创建成功'})
+        except Exception as e:
+            db.rollback()
+            db.close()
+            return jsonify({'success': False, 'message': f'创建失败: {str(e)}'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'message': f'创建失败: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'系统错误: {str(e)}'}), 500
 
 if __name__ == '__main__':
     init_db()
