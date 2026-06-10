@@ -1030,6 +1030,63 @@ def checkin_by_date():
     except Exception as e:
         return jsonify({'success': False, 'message': f'查询失败: {str(e)}'}), 500
 
+# ========== 获取代表列表API（用于桌面客户端）==========
+
+@app.route('/api/delegates', methods=['GET'])
+def api_delegates():
+    """获取所有代表列表"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+
+    try:
+        db = get_db()
+        c = db.execute("SELECT * FROM delegates ORDER BY created_at DESC")
+        rows = c.fetchall()
+
+        # 统计
+        c = db.execute("SELECT COUNT(*) AS count FROM delegates")
+        total = c.fetchone()['count']
+        c = db.execute("SELECT COUNT(*) AS count FROM delegates WHERE status = 'pending'")
+        pending = c.fetchone()['count']
+        c = db.execute("SELECT COUNT(*) AS count FROM delegates WHERE status = 'approved'")
+        approved = c.fetchone()['count']
+        c = db.execute("SELECT COUNT(*) AS count FROM delegates WHERE checked_in = 1")
+        checked_in = c.fetchone()['count']
+
+        db.close()
+
+        delegates = []
+        for row in rows:
+            delegates.append({
+                'id': row['id'],
+                'name': row['name'],
+                'student_id': row['student_id'],
+                'gender': row['gender'],
+                'political_status': row['political_status'],
+                'delegation': row['delegation'],
+                'delegation_type': row['delegation_type'],
+                'class_name': row['class_name'],
+                'photo_path': row['photo_path'],
+                'status': row['status'],
+                'card_number': row['card_number'],
+                'checked_in': bool(row['checked_in']),
+                'check_in_time': row['check_in_time'],
+                'created_at': row['created_at']
+            })
+
+        return jsonify({
+            'success': True,
+            'delegates': delegates,
+            'stats': {
+                'total': total,
+                'pending': pending,
+                'approved': approved,
+                'checked_in': checked_in
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'查询失败: {str(e)}'}), 500
+
 # ========== 重置签到状态API（用于次日签到）==========
 
 @app.route('/api/reset-checkin', methods=['POST'])
