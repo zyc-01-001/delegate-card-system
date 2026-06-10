@@ -1033,6 +1033,52 @@ def checkin_dates():
         'dates': [row['check_date'] for row in dates]
     })
 
+# ========== 初始化签到记录表（用于现有数据库升级）==========
+
+@app.route('/init-checkin-table')
+def init_checkin_table():
+    """初始化签到记录表（用于现有数据库升级）"""
+    try:
+        db = get_db()
+
+        # 检查表是否已存在
+        try:
+            db.execute("SELECT 1 FROM checkin_records LIMIT 1")
+            return jsonify({'success': True, 'message': '签到记录表已存在'})
+        except:
+            pass  # 表不存在，继续创建
+
+        # 创建签到记录表
+        if USE_POSTGRESQL:
+            db.execute('''
+                CREATE TABLE checkin_records (
+                    id SERIAL PRIMARY KEY,
+                    delegate_id INTEGER NOT NULL,
+                    check_date DATE NOT NULL,
+                    check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    admin_user TEXT,
+                    UNIQUE(delegate_id, check_date)
+                )
+            ''')
+        else:
+            db.execute('''
+                CREATE TABLE checkin_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    delegate_id INTEGER NOT NULL,
+                    check_date DATE NOT NULL,
+                    check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    admin_user TEXT,
+                    UNIQUE(delegate_id, check_date)
+                )
+            ''')
+
+        db.commit()
+        db.close()
+
+        return jsonify({'success': True, 'message': '签到记录表创建成功'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'创建失败: {str(e)}'}), 500
+
 if __name__ == '__main__':
     init_db()
     # 生产环境使用环境变量配置端口，默认5000
