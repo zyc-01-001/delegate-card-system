@@ -945,51 +945,54 @@ def checkin_by_date():
     if not date:
         date = datetime.now().strftime("%Y-%m-%d")
 
-    db = get_db()
+    try:
+        db = get_db()
 
-    # 获取该日期的签到记录
-    c = db.execute("""
-        SELECT cr.*, d.name, d.student_id, d.delegation, d.delegation_type, d.photo_path
-        FROM checkin_records cr
-        JOIN delegates d ON cr.delegate_id = d.id
-        WHERE cr.check_date = ?
-        ORDER BY cr.check_time DESC
-    """, (date,))
-    records = c.fetchall()
+        # 获取该日期的签到记录
+        c = db.execute("""
+            SELECT cr.*, d.name, d.student_id, d.delegation, d.delegation_type, d.photo_path
+            FROM checkin_records cr
+            JOIN delegates d ON cr.delegate_id = d.id
+            WHERE cr.check_date = ?
+            ORDER BY cr.check_time DESC
+        """, (date,))
+        records = c.fetchall()
 
-    # 统计
-    c = db.execute("SELECT COUNT(*) AS count FROM checkin_records WHERE check_date = ?", (date,))
-    checkin_count = c.fetchone()['count']
+        # 统计
+        c = db.execute("SELECT COUNT(*) AS count FROM checkin_records WHERE check_date = ?", (date,))
+        checkin_count = c.fetchone()['count']
 
-    c = db.execute("SELECT COUNT(*) AS count FROM delegates WHERE status = 'approved'")
-    total_approved = c.fetchone()['count']
+        c = db.execute("SELECT COUNT(*) AS count FROM delegates WHERE status = 'approved'")
+        total_approved = c.fetchone()['count']
 
-    db.close()
+        db.close()
 
-    results = []
-    for row in records:
-        results.append({
-            'id': row['id'],
-            'delegate_id': row['delegate_id'],
-            'name': row['name'],
-            'student_id': row['student_id'],
-            'delegation': row['delegation'],
-            'delegation_type': row['delegation_type'],
-            'check_time': row['check_time'],
-            'admin_user': row['admin_user'],
-            'photo_path': row['photo_path']
+        results = []
+        for row in records:
+            results.append({
+                'id': row['id'],
+                'delegate_id': row['delegate_id'],
+                'name': row['name'],
+                'student_id': row['student_id'],
+                'delegation': row['delegation'],
+                'delegation_type': row['delegation_type'],
+                'check_time': row['check_time'],
+                'admin_user': row['admin_user'],
+                'photo_path': row['photo_path']
+            })
+
+        return jsonify({
+            'success': True,
+            'date': date,
+            'records': results,
+            'stats': {
+                'checkin_count': checkin_count,
+                'total_approved': total_approved,
+                'not_checkin': total_approved - checkin_count
+            }
         })
-
-    return jsonify({
-        'success': True,
-        'date': date,
-        'records': results,
-        'stats': {
-            'checkin_count': checkin_count,
-            'total_approved': total_approved,
-            'not_checkin': total_approved - checkin_count
-        }
-    })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'查询失败: {str(e)}'}), 500
 
 # ========== 重置签到状态API（用于次日签到）==========
 
@@ -1043,10 +1046,12 @@ def init_checkin_table():
 
         # 检查表是否已存在
         try:
-            db.execute("SELECT 1 FROM checkin_records LIMIT 1")
+            c = db.execute("SELECT 1 FROM checkin_records LIMIT 1")
+            db.commit()
+            db.close()
             return jsonify({'success': True, 'message': '签到记录表已存在'})
         except:
-            pass  # 表不存在，继续创建
+            db.commit()  # 回滚失败的事务
 
         # 创建签到记录表
         if USE_POSTGRESQL:
