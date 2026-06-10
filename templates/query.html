@@ -43,7 +43,7 @@
         <div class="card-body">
             <div class="card-photo">
                 {% if delegate.photo_path %}
-                <img src="{{ url_for('static', filename=delegate.photo_path.replace('static/', '')) }}" alt="照片" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="/{{ delegate.photo_path }}" alt="照片" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div style="width:100%;height:100%;display:none;align-items:center;justify-content:center;background:#f0f0f0;color:#999;">照片加载失败</div>
                 {% else %}
                 <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f0f0f0;color:#999;">无照片</div>

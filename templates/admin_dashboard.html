@@ -443,7 +443,7 @@
                     <td>{{ d.id }}</td>
                     <td>
                         {% if d.photo_path %}
-                        <img src="{{ url_for('static', filename=d.photo_path.replace('static/', '')) }}" class="photo-thumb" alt="照片" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+                        <img src="/{{ d.photo_path }}" class="photo-thumb" alt="照片" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
                         <span style="color: #999; display: none;">照片加载失败</span>
                         {% else %}
                         <span style="color: #999;">无</span>
