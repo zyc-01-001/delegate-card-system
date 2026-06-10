@@ -1142,14 +1142,27 @@ def batch_reject_photo():
 
     try:
         db = get_db()
-        # 找出照片是文件路径格式（不以data:开头）且状态为approved的学生
-        c = db.execute("""
-            SELECT id, name, student_id FROM delegates 
-            WHERE photo_path != '' AND photo_path NOT LIKE 'data:%' AND status = 'approved'
-        """)
-        affected = c.fetchall()
+        # 先获取所有approved的学生
+        c = db.execute("SELECT id, name, student_id, photo_path FROM delegates WHERE status = 'approved'")
+        all_approved = c.fetchall()
+        
+        # 过滤出照片是文件路径格式（不以data:开头）的学生
+        affected = []
+        for row in all_approved:
+            photo_path = row['photo_path'] if isinstance(row, dict) else row[3]
+            if photo_path and not photo_path.startswith('data:'):
+                affected.append(row)
+        
         count = len(affected)
-        names = [r['name'] for r in affected]
+        names = []
+        affected_ids = []
+        for row in affected:
+            if isinstance(row, dict):
+                names.append(row['name'])
+                affected_ids.append(row['id'])
+            else:
+                names.append(row[1])
+                affected_ids.append(row[0])
 
         if count == 0:
             db.close()
@@ -1160,11 +1173,10 @@ def batch_reject_photo():
                 'names': []
             })
 
-        # 批量将状态改为rejected，保留其他信息
-        db.execute("""
-            UPDATE delegates SET status = 'rejected'
-            WHERE photo_path != '' AND photo_path NOT LIKE 'data:%' AND status = 'approved'
-        """)
+        # 批量将状态改为rejected
+        for delegate_id in affected_ids:
+            db.execute("UPDATE delegates SET status = 'rejected' WHERE id = ?", (delegate_id,))
+        
         db.commit()
         db.close()
 
@@ -1175,6 +1187,9 @@ def batch_reject_photo():
             'names': names
         })
     except Exception as e:
+        import traceback
+        print(f"批量打回错误: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({'success': False, 'message': f'操作失败: {str(e)}'}), 500
 
 # ========== 获取签到日期列表API ==========
