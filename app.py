@@ -1132,6 +1132,51 @@ def reset_checkin():
         'message': '签到状态已重置，可以开始新的签到日'
     })
 
+# ========== 批量打回照片有问题的学生API ==========
+
+@app.route('/api/batch-reject-photo', methods=['POST'])
+def batch_reject_photo():
+    """批量打回照片有问题的学生（旧文件路径格式），让他们重新提交"""
+    if not session.get('admin'):
+        return jsonify({'success': False, 'message': '未授权'}), 403
+
+    try:
+        db = get_db()
+        # 找出照片是文件路径格式（不以data:开头）且状态为approved的学生
+        c = db.execute("""
+            SELECT id, name, student_id FROM delegates 
+            WHERE photo_path != '' AND photo_path NOT LIKE 'data:%' AND status = 'approved'
+        """)
+        affected = c.fetchall()
+        count = len(affected)
+        names = [r['name'] for r in affected]
+
+        if count == 0:
+            db.close()
+            return jsonify({
+                'success': True,
+                'message': '没有需要重新提交照片的学生',
+                'count': 0,
+                'names': []
+            })
+
+        # 批量将状态改为rejected，保留其他信息
+        db.execute("""
+            UPDATE delegates SET status = 'rejected'
+            WHERE photo_path != '' AND photo_path NOT LIKE 'data:%' AND status = 'approved'
+        """)
+        db.commit()
+        db.close()
+
+        return jsonify({
+            'success': True,
+            'message': f'已打回 {count} 名学生，请通知他们重新提交照片',
+            'count': count,
+            'names': names
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'操作失败: {str(e)}'}), 500
+
 # ========== 获取签到日期列表API ==========
 
 @app.route('/api/checkin-dates', methods=['GET'])
