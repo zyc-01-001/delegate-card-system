@@ -335,17 +335,42 @@ def apply():
 
         db = get_db()
         try:
-            db.execute('''
-                INSERT INTO delegates (name, student_id, gender, political_status,
-                delegation, delegation_type, class_name, photo_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (name, student_id, gender, political_status, delegation,
-                  delegation_type, class_name, photo_path))
-            db.commit()
-            flash('信息提交成功！请等待管理员审核。', 'success')
-            return redirect(url_for('apply_success'))
-        except db.IntegrityError:
-            flash('该学号已提交过申请，请勿重复提交。', 'error')
+            # 检查该学号是否已存在
+            c = db.execute("SELECT * FROM delegates WHERE student_id = ?", (student_id,))
+            existing = c.fetchone()
+            
+            if existing:
+                # 如果之前的状态是 rejected（被拒绝/打回），允许重新提交
+                if existing['status'] == 'rejected':
+                    # 更新原有记录
+                    db.execute('''
+                        UPDATE delegates 
+                        SET name = ?, gender = ?, political_status = ?,
+                            delegation = ?, delegation_type = ?, class_name = ?, 
+                            photo_path = ?, status = 'pending', card_number = NULL,
+                            checked_in = 0, check_in_time = NULL
+                        WHERE student_id = ?
+                    ''', (name, gender, political_status, delegation,
+                          delegation_type, class_name, photo_path, student_id))
+                    db.commit()
+                    flash('信息重新提交成功！请等待管理员审核。', 'success')
+                    return redirect(url_for('apply_success'))
+                else:
+                    # 其他状态（pending 或 approved）不允许重复提交
+                    flash('该学号已提交过申请，请勿重复提交。如需修改请联系管理员。', 'error')
+            else:
+                # 新学号，直接插入
+                db.execute('''
+                    INSERT INTO delegates (name, student_id, gender, political_status,
+                    delegation, delegation_type, class_name, photo_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (name, student_id, gender, political_status, delegation,
+                      delegation_type, class_name, photo_path))
+                db.commit()
+                flash('信息提交成功！请等待管理员审核。', 'success')
+                return redirect(url_for('apply_success'))
+        except Exception as e:
+            flash(f'提交失败：{str(e)}', 'error')
         finally:
             db.close()
 
@@ -359,6 +384,7 @@ def apply_success():
 def query():
     delegate = None
     qr_base64 = None
+    today_checkin = None  # 今日签到记录
     if request.method == 'POST':
         name = request.form['name']
         student_id = request.form['student_id']
@@ -367,19 +393,29 @@ def query():
         c = db.execute("SELECT * FROM delegates WHERE name = ? AND student_id = ?",
                        (name, student_id))
         delegate = c.fetchone()
-        db.close()
-
-        if not delegate:
-            flash('未找到相关代表信息，请检查姓名和学号是否正确。', 'error')
-        elif delegate['status'] == 'approved':
-            # 生成签到二维码
+        
+        if delegate and delegate['status'] == 'approved':
+            # 查询今日签到记录
+            today = datetime.now().strftime("%Y-%m-%d")
+            c = db.execute("""
+                SELECT * FROM checkin_records 
+                WHERE delegate_id = ? AND check_date = ?
+            """, (delegate['id'], today))
+            today_checkin = c.fetchone()
+            
+            # 生成签到二维码（使用delegate_id，永久不变）
             check_in_url = request.url_root + 'checkin/' + str(delegate['id'])
             qr_img = generate_qr_code(check_in_url)
             buffer = io.BytesIO()
             qr_img.save(buffer, format='PNG')
             qr_base64 = base64.b64encode(buffer.getvalue()).decode()
 
-    return render_template('query.html', delegate=delegate, qr_base64=qr_base64)
+        db.close()
+
+        if not delegate:
+            flash('未找到相关代表信息，请检查姓名和学号是否正确。', 'error')
+
+    return render_template('query.html', delegate=delegate, qr_base64=qr_base64, today_checkin=today_checkin)
 
 @app.route('/card/<int:delegate_id>')
 def show_card(delegate_id):

@@ -94,13 +94,16 @@
         <h3 style="margin-bottom: 15px;">📱 会议签到二维码</h3>
         <img src="data:image/png;base64,{{ qr_base64 }}" alt="签到二维码">
         <p style="color: #666; font-size: 14px;">
-            {% if delegate.checked_in %}
-            <span style="color: #28a745;">✅ 已签到</span> 
-            {% if delegate.check_in_time %}({{ delegate.check_in_time }}){% endif %}
+            {% if today_checkin %}
+            <span style="color: #28a745;">✅ 今日已签到</span> 
+            ({{ today_checkin.check_time }})
             {% else %}
-            <span style="color: #C41E3A;">⏳ 未签到</span><br>
-            请于会议开始前30分钟扫码签到
+            <span style="color: #C41E3A;">⏳ 今日未签到</span><br>
+            请出示此二维码扫码签到
             {% endif %}
+        </p>
+        <p style="color: #999; font-size: 12px; margin-top: 5px;">
+            💡 此二维码长期有效，可多日使用
         </p>
     </div>
     
